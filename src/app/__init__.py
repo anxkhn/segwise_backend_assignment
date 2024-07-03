@@ -42,8 +42,9 @@ def create_app():
 
         # Import sample CSV data if the table is empty
         if not db.session.query(views.GameData).first():
-            from .utils import import_sample_data
+            from .utils import import_sample_data, import_sample_events
 
             import_sample_data()
+            import_sample_events()
 
     return app

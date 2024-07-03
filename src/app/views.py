@@ -5,7 +5,7 @@ from flask_restx import Namespace, Resource, fields,reqparse
 from werkzeug.utils import secure_filename
 import time
 from . import db, limiter
-from .models import GameData
+from .models import GameData, Event
 from .utils import save_csv_to_db
 
 api = Namespace("api", description="Game data operations")
@@ -56,10 +56,22 @@ class UploadCSV(Resource):
 
         if file and allowed_file(file.filename):
             try:
-                # Append unix epoch to filename to avoid conflicts
-                filename = f"{int(time.time())}_{altname}.csv" if altname else f"{int(time.time())}_{secure_filename(file_url.rsplit('/', 1)[-1])}"
-                file.save(os.path.join(UPLOAD_FOLDER, filename))
-                save_csv_to_db(os.path.join(UPLOAD_FOLDER, filename),encoding,delimiter)
+                filename = f"{int(time.time())}_{altname}.csv" if altname else f"{int(time.time())}_{secure_filename(file.filename)}"
+                file_path = os.path.join(UPLOAD_FOLDER, filename)
+                file.save(file_path)
+
+                event = Event(
+                    original_url=None,
+                    mode='upload',
+                    altname=altname,
+                    filepath=file_path,
+                    encoding=encoding,
+                    delimiter=delimiter
+                )
+                db.session.add(event)
+                db.session.commit()
+
+                save_csv_to_db(file_path, encoding, delimiter, event.id)
                 return {"message": "CSV data uploaded and imported successfully"}, 201
             except Exception as e:
                 return {"error": str(e)}, 500
@@ -82,12 +94,23 @@ class ImportCSV(Resource):
         try:
             response = requests.get(file_url, stream=True)
             if response.status_code == 200:
-                # Append unix epoch to filename to avoid conflicts
                 filename = f"{int(time.time())}_{altname}.csv" if altname else f"{int(time.time())}_{secure_filename(file_url.rsplit('/', 1)[-1])}"
                 file_path = os.path.join(UPLOAD_FOLDER, filename)
                 with open(file_path, 'wb') as f:
                     f.write(response.content)
-                save_csv_to_db(file_path,encoding,delimiter)
+
+                event = Event(
+                    original_url=file_url,
+                    mode='import',
+                    altname=altname,
+                    filepath=file_path,
+                    encoding=encoding,
+                    delimiter=delimiter
+                )
+                db.session.add(event)
+                db.session.commit()
+
+                save_csv_to_db(file_path, encoding, delimiter, event.id)
                 return {"message": "CSV data imported successfully from URL"}, 201
             else:
                 return {"error": f"Failed to fetch file from URL: {file_url}. Status code: {response.status_code}"}, 400

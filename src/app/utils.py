@@ -4,7 +4,7 @@ from . import db
 from .models import GameData
 
 
-def save_csv_to_db(csv_file_path, encoding='utf-8', delimiter=','):
+def save_csv_to_db(csv_file_path, encoding='utf-8', delimiter=',', event_id=None):
     data = pd.read_csv(csv_file_path, encoding=encoding, delimiter=delimiter)
     data = data.where(pd.notnull(data), None)  # Replace NaNs with None
     for _, row in data.iterrows():
@@ -28,10 +28,11 @@ def save_csv_to_db(csv_file_path, encoding='utf-8', delimiter=','):
             categories=row["Categories"],
             genres=row["Genres"],
             tags=row["Tags"],
+            event_id=event_id
         )
         db.session.add(game_data)
     db.session.commit()
-
+    
 def query_data(filters):
     query = GameData.query
     for key, value in filters.items():
@@ -69,6 +70,24 @@ def import_sample_data():
             categories=row["Categories"],
             genres=row["Genres"],
             tags=row["Tags"],
+            event_id=0
         )
         db.session.add(game_data)
+    db.session.commit()
+    
+def import_sample_events():
+    sample_events_path = "sample_events.csv"
+    data = pd.read_csv(sample_events_path)
+    data = data.where(pd.notnull(data), None)  # Replace NaNs with None
+    for _, row in data.iterrows():
+        event = Event(
+            original_url=row["Original URL"],
+            mode=row["Mode"],
+            altname=row["Altname"],
+            filepath=row["Filepath"],
+            encoding=row["Encoding"],
+            delimiter=row["Delimiter"],
+            created_at=row["Created at"]
+        )
+        db.session.add(event)
     db.session.commit()
