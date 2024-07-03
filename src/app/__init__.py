@@ -9,9 +9,20 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 limiter = Limiter(key_func=get_remote_address)
+authorizations = {
+    'apikey': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'X-API-Key'
+    }
+}
 
 
 def create_app():
+    
+    
+    
+    
     app = Flask(__name__)
     app.config.from_object("config.Config")
 
@@ -30,7 +41,7 @@ def create_app():
     Migrate(app, db)
     limiter.init_app(app)
 
-    api = Api(app, doc="/swagger")
+    api = Api(app, doc="/swagger",authorizations=authorizations, security='apikey')
 
     with app.app_context():
         from . import views

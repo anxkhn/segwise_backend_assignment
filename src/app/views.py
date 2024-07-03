@@ -1,14 +1,27 @@
 import os
 import requests
 from flask import request
-from flask_restx import Namespace, Resource, fields,reqparse
+from flask_restx import Namespace, Resource, fields, reqparse, Api
 from werkzeug.utils import secure_filename
 import time
 from . import db, limiter
 from .models import GameData, Event
 from .utils import save_csv_to_db
+from functools import wraps
+from dotenv import load_dotenv
 
-api = Namespace("api", description="Game data operations")
+load_dotenv()
+
+authorizations = {
+    'apikey': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'X-API-Key'
+    }
+}
+
+api = Namespace("api", description="Game data operations", authorizations=authorizations, security='apikey')
+
 
 csv_upload = api.model(
     "CSVUpload",
@@ -34,18 +47,30 @@ csv_upload_parser.add_argument('altname', type=str, required=False, help='Altern
 csv_upload_parser.add_argument('encoding', type=str, required=False, default='utf-8', help='File encoding')
 csv_upload_parser.add_argument('delimiter', type=str, required=False, default=',', help='CSV delimiter')
 
-
 csv_import_parser = reqparse.RequestParser()
 csv_import_parser.add_argument('file_url', type=str, help='URL of the CSV file to import')
 csv_import_parser.add_argument('altname', type=str, required=False, help='Alternative name for the file')
 csv_import_parser.add_argument('encoding', type=str, required=False, default='utf-8', help='File encoding')
 csv_import_parser.add_argument('delimiter', type=str, required=False, default=',', help='CSV delimiter')
 
+def check_secret_key():
+    secret_key = request.headers.get('X-API-Key')
+    if not secret_key or secret_key != "test":
+        api.abort(401, "Invalid or missing API Key")
+
+def require_api_key(func):
+    @wraps(func)
+    def decorated(*args, **kwargs):
+        check_secret_key()
+        return func(*args, **kwargs)
+    return decorated
 
 @api.route('/upload_csv')
 class UploadCSV(Resource):
+    @api.doc(security='apikey')
     @api.expect(csv_upload_parser)
     @limiter.limit("2 per minute")
+    @require_api_key
     def post(self):
         file = request.files['file']
         altname = request.args.get('altname')
@@ -80,8 +105,10 @@ class UploadCSV(Resource):
 
 @api.route('/import_csv')
 class ImportCSV(Resource):
+    @api.doc(security='apikey')
     @api.expect(csv_import_parser)
     @limiter.limit("2 per minute")
+    @require_api_key
     def post(self):
         args = csv_import_parser.parse_args()
         file_url = args.get('file_url')
@@ -117,7 +144,6 @@ class ImportCSV(Resource):
         except Exception as e:
             return {"error": str(e)}, 500
 
-
 @api.route("/query")
 class QueryData(Resource):
     @limiter.limit("10 per minute")
@@ -128,7 +154,6 @@ class QueryData(Resource):
             return results, 200
         except Exception as e:
             return {"error": str(e)}, 500
-
 
 def query_data(filters):
     query = db.session.query(GameData)
