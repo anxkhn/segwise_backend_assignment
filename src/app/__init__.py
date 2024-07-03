@@ -17,7 +17,8 @@ def create_app():
 
     # Define the UPLOAD_FOLDER path
     app.config["UPLOAD_FOLDER"] = "uploads/"
-
+    # Define the 150MB limit app wide
+    app.config['MAX_CONTENT_LENGTH'] = 150 * 1000 * 1000
 
     # Ensure the UPLOAD_FOLDER exists
     try:

@@ -4,8 +4,8 @@ from . import db
 from .models import GameData
 
 
-def save_csv_to_db(csv_file_path):
-    data = pd.read_csv(csv_file_path)
+def save_csv_to_db(csv_file_path, encoding='utf-8', delimiter=','):
+    data = pd.read_csv(csv_file_path, encoding=encoding, delimiter=delimiter)
     data = data.where(pd.notnull(data), None)  # Replace NaNs with None
     for _, row in data.iterrows():
         game_data = GameData(
@@ -31,7 +31,6 @@ def save_csv_to_db(csv_file_path):
         )
         db.session.add(game_data)
     db.session.commit()
-
 
 def query_data(filters):
     query = GameData.query
