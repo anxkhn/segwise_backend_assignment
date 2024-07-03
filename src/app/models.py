@@ -1,5 +1,6 @@
 from . import db
 
+
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     original_url = db.Column(db.String(255), nullable=True)
@@ -9,6 +10,8 @@ class Event(db.Model):
     encoding = db.Column(db.String(50), nullable=False)
     delimiter = db.Column(db.String(5), nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+
 class GameData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     app_id = db.Column(db.Integer, nullable=False)
@@ -30,7 +33,7 @@ class GameData(db.Model):
     categories = db.Column(db.String(255), nullable=True)
     genres = db.Column(db.String(255), nullable=True)
     tags = db.Column(db.String(255), nullable=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
+    event_id = db.Column(db.Integer, db.ForeignKey("event.id"), nullable=False)
 
     def as_dict(self):
         return {
@@ -54,5 +57,5 @@ class GameData(db.Model):
             "categories": self.categories,
             "genres": self.genres,
             "tags": self.tags,
-            "event_id": self.event_id
+            "event_id": self.event_id,
         }

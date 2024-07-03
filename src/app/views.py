@@ -1,26 +1,28 @@
 import os
-import requests
-from flask import request
-from flask_restx import Namespace, Resource, fields, reqparse, Api
-from werkzeug.utils import secure_filename
 import time
-from . import db, limiter
-from .models import GameData, Event
-from .utils import save_csv_to_db
 from functools import wraps
+
+import requests
 from dotenv import load_dotenv
+from flask import request
+from flask_restx import Api, Namespace, Resource, fields, reqparse
+from werkzeug.utils import secure_filename
+
+from . import db, limiter
+from .models import Event, GameData
+from .utils import save_csv_to_db
 
 load_dotenv()
 
-authorizations = {
-    'apikey': {
-        'type': 'apiKey',
-        'in': 'header',
-        'name': 'X-API-Key'
-    }
-}
+authorizations = {"apikey": {"type": "apiKey",
+                             "in": "header", "name": "X-API-Key"}}
 
-api = Namespace("api", description="Game data operations", authorizations=authorizations, security='apikey')
+api = Namespace(
+    "api",
+    description="Game data operations",
+    authorizations=authorizations,
+    security="apikey",
+)
 
 
 csv_upload = api.model(
@@ -32,66 +34,91 @@ csv_upload = api.model(
 UPLOAD_FOLDER = "uploads/"
 ALLOWED_EXTENSIONS = {"csv"}
 
+
 def validate_csv_params(encoding, delimiter):
-    valid_encodings = ['utf-8', 'ascii', 'iso-8859-1']  # Add more as needed
+    valid_encodings = ["utf-8", "ascii", "iso-8859-1"]  # Add more as needed
     if encoding not in valid_encodings or len(delimiter) != 1:
         return False
     return True
 
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
 csv_upload_parser = reqparse.RequestParser()
-csv_upload_parser.add_argument('file', location='files', type='FileStorage')
-csv_upload_parser.add_argument('altname', type=str, required=False, help='Alternative name for the file')
-csv_upload_parser.add_argument('encoding', type=str, required=False, default='utf-8', help='File encoding')
-csv_upload_parser.add_argument('delimiter', type=str, required=False, default=',', help='CSV delimiter')
+csv_upload_parser.add_argument("file", location="files", type="FileStorage")
+csv_upload_parser.add_argument(
+    "altname", type=str, required=False, help="Alternative name for the file"
+)
+csv_upload_parser.add_argument(
+    "encoding", type=str, required=False, default="utf-8", help="File encoding"
+)
+csv_upload_parser.add_argument(
+    "delimiter", type=str, required=False, default=",", help="CSV delimiter"
+)
 
 csv_import_parser = reqparse.RequestParser()
-csv_import_parser.add_argument('file_url', type=str, help='URL of the CSV file to import')
-csv_import_parser.add_argument('altname', type=str, required=False, help='Alternative name for the file')
-csv_import_parser.add_argument('encoding', type=str, required=False, default='utf-8', help='File encoding')
-csv_import_parser.add_argument('delimiter', type=str, required=False, default=',', help='CSV delimiter')
+csv_import_parser.add_argument(
+    "file_url", type=str, help="URL of the CSV file to import"
+)
+csv_import_parser.add_argument(
+    "altname", type=str, required=False, help="Alternative name for the file"
+)
+csv_import_parser.add_argument(
+    "encoding", type=str, required=False, default="utf-8", help="File encoding"
+)
+csv_import_parser.add_argument(
+    "delimiter", type=str, required=False, default=",", help="CSV delimiter"
+)
+
 
 def check_secret_key():
-    secret_key = request.headers.get('X-API-Key')
+    secret_key = request.headers.get("X-API-Key")
     if not secret_key or secret_key != "test":
         api.abort(401, "Invalid or missing API Key")
+
 
 def require_api_key(func):
     @wraps(func)
     def decorated(*args, **kwargs):
         check_secret_key()
         return func(*args, **kwargs)
+
     return decorated
 
-@api.route('/upload_csv')
+
+@api.route("/upload_csv")
 class UploadCSV(Resource):
-    @api.doc(security='apikey')
+    @api.doc(security="apikey")
     @api.expect(csv_upload_parser)
     @limiter.limit("2 per minute")
     @require_api_key
     def post(self):
-        file = request.files['file']
-        altname = request.args.get('altname')
-        encoding = request.args.get('encoding')
-        delimiter = request.args.get('delimiter')
+        file = request.files["file"]
+        altname = request.args.get("altname")
+        encoding = request.args.get("encoding")
+        delimiter = request.args.get("delimiter")
         if validate_csv_params(encoding, delimiter) == False:
             return {"error": "Invalid encoding or delimiter"}, 400
 
         if file and allowed_file(file.filename):
             try:
-                filename = f"{int(time.time())}_{altname}.csv" if altname else f"{int(time.time())}_{secure_filename(file.filename)}"
+                filename = (
+                    f"{int(time.time())}_{altname}.csv"
+                    if altname
+                    else f"{int(time.time())}_{secure_filename(file.filename)}"
+                )
                 file_path = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(file_path)
 
                 event = Event(
                     original_url=None,
-                    mode='upload',
+                    mode="upload",
                     altname=altname,
                     filepath=file_path,
                     encoding=encoding,
-                    delimiter=delimiter
+                    delimiter=delimiter,
                 )
                 db.session.add(event)
                 db.session.commit()
@@ -103,36 +130,41 @@ class UploadCSV(Resource):
         else:
             return {"error": "Invalid file type. Allowed file types: csv"}, 400
 
-@api.route('/import_csv')
+
+@api.route("/import_csv")
 class ImportCSV(Resource):
-    @api.doc(security='apikey')
+    @api.doc(security="apikey")
     @api.expect(csv_import_parser)
     @limiter.limit("2 per minute")
     @require_api_key
     def post(self):
         args = csv_import_parser.parse_args()
-        file_url = args.get('file_url')
-        altname = args.get('altname')
-        encoding = args.get('encoding')
-        delimiter = args.get('delimiter')
+        file_url = args.get("file_url")
+        altname = args.get("altname")
+        encoding = args.get("encoding")
+        delimiter = args.get("delimiter")
         if validate_csv_params(encoding, delimiter) == False:
             return {"error": "Invalid encoding or delimiter"}, 400
 
         try:
             response = requests.get(file_url, stream=True)
             if response.status_code == 200:
-                filename = f"{int(time.time())}_{altname}.csv" if altname else f"{int(time.time())}_{secure_filename(file_url.rsplit('/', 1)[-1])}"
+                filename = (
+                    f"{int(time.time())}_{altname}.csv"
+                    if altname
+                    else f"{int(time.time())}_{secure_filename(file_url.rsplit('/', 1)[-1])}"
+                )
                 file_path = os.path.join(UPLOAD_FOLDER, filename)
-                with open(file_path, 'wb') as f:
+                with open(file_path, "wb") as f:
                     f.write(response.content)
 
                 event = Event(
                     original_url=file_url,
-                    mode='import',
+                    mode="import",
                     altname=altname,
                     filepath=file_path,
                     encoding=encoding,
-                    delimiter=delimiter
+                    delimiter=delimiter,
                 )
                 db.session.add(event)
                 db.session.commit()
@@ -140,9 +172,12 @@ class ImportCSV(Resource):
                 save_csv_to_db(file_path, encoding, delimiter, event.id)
                 return {"message": "CSV data imported successfully from URL"}, 201
             else:
-                return {"error": f"Failed to fetch file from URL: {file_url}. Status code: {response.status_code}"}, 400
+                return {
+                    "error": f"Failed to fetch file from URL: {file_url}. Status code: {response.status_code}"
+                }, 400
         except Exception as e:
             return {"error": str(e)}, 500
+
 
 @api.route("/query")
 class QueryData(Resource):
@@ -154,6 +189,7 @@ class QueryData(Resource):
             return results, 200
         except Exception as e:
             return {"error": str(e)}, 500
+
 
 def query_data(filters):
     query = db.session.query(GameData)
