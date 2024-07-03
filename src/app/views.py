@@ -1,7 +1,7 @@
 import os
-
+import requests
 from flask import request
-from flask_restx import Namespace, Resource, fields
+from flask_restx import Namespace, Resource, fields,reqparse
 from werkzeug.utils import secure_filename
 
 from . import db, limiter
@@ -23,30 +23,55 @@ ALLOWED_EXTENSIONS = {"csv"}
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+csv_upload_parser = reqparse.RequestParser()
+csv_upload_parser.add_argument('file', location='files', type='FileStorage')
 
-csv_upload_parser = api.parser()
-csv_upload_parser.add_argument(
-    "file", location="files", type="FileStorage", required=True
-)
+csv_import_parser = reqparse.RequestParser()
+csv_import_parser.add_argument('file_url', type=str, help='URL of the CSV file to import')
 
 
-@api.route("/upload")
+@api.route('/upload_csv')
 class UploadCSV(Resource):
     @api.expect(csv_upload_parser)
     @limiter.limit("2 per minute")
     def post(self):
-        file = request.files["file"]
+        file = request.files['file']
 
         if file and allowed_file(file.filename):
             try:
                 filename = secure_filename(file.filename)
                 file.save(os.path.join(UPLOAD_FOLDER, filename))
                 save_csv_to_db(os.path.join(UPLOAD_FOLDER, filename))
-                return {"message": "CSV data uploaded successfully"}, 201
+                return {"message": "CSV data uploaded and imported successfully"}, 201
             except Exception as e:
                 return {"error": str(e)}, 500
         else:
             return {"error": "Invalid file type. Allowed file types: csv"}, 400
+
+@api.route('/import_csv')
+class ImportCSV(Resource):
+    @api.expect(csv_import_parser)
+    @limiter.limit("2 per minute")
+    def post(self):
+        args = csv_import_parser.parse_args()
+        file_url = args.get('file_url')
+
+        try:
+            response = requests.get(file_url, stream=True)
+            if response.status_code == 200:
+                filename = secure_filename(file_url.rsplit('/', 1)[-1])
+                file_path = os.path.join(UPLOAD_FOLDER, filename)
+
+                with open(file_path, 'wb') as f:
+                    f.write(response.content)
+
+                save_csv_to_db(file_path)
+
+                return {"message": "CSV data imported successfully from URL"}, 201
+            else:
+                return {"error": f"Failed to fetch file from URL: {file_url}. Status code: {response.status_code}"}, 400
+        except Exception as e:
+            return {"error": str(e)}, 500
 
 
 @api.route("/query")

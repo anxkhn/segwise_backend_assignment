@@ -16,7 +16,8 @@ def create_app():
     app.config.from_object("config.Config")
 
     # Define the UPLOAD_FOLDER path
-    app.config["UPLOAD_FOLDER"] = os.path.join(app.instance_path, "uploads")
+    app.config["UPLOAD_FOLDER"] = "uploads/"
+
 
     # Ensure the UPLOAD_FOLDER exists
     try:
