@@ -1,8 +1,24 @@
 from . import db
-from .models import GameData, Event 
+from .models import GameData, Event
 import pandas as pd
 from datetime import datetime
 
+
+def parse_date(date_str):
+    try:
+        date = datetime.strptime(date_str, "%b %d, %Y")
+    except ValueError:
+        date_parts = date_str.split()
+        month = date_parts[0][:3] if len(date_parts) > 0 else "Jan"
+        day = date_parts[1] if len(date_parts) > 1 else "1"
+        year = date_parts[2] if len(date_parts) > 2 else "1970"
+        try:
+            date = datetime.strptime(f"{month} {day}, {year}", "%b %d, %Y")
+        except ValueError:
+            date = datetime(
+                1970, 1, 1
+            )  # fallback to Jan 1, 1970 for invalid date strings
+    return date.strftime("%Y-%m-%d")
 
 
 def save_csv_to_db(csv_file_path, encoding="utf-8", delimiter=",", event_id=None):
@@ -12,7 +28,7 @@ def save_csv_to_db(csv_file_path, encoding="utf-8", delimiter=",", event_id=None
         game_data = GameData(
             app_id=row["AppID"],
             name=row["Name"],
-            release_date=row["Release date"],
+            release_date=parse_date(row["Release date"]),
             required_age=row["Required age"],
             price=row["Price"],
             dlc_count=row["DLC count"],
@@ -55,7 +71,7 @@ def import_sample_data():
         game_data = GameData(
             app_id=row["AppID"],
             name=row["Name"],
-            release_date=row["Release date"],
+            release_date=parse_date(row["Release date"]),
             required_age=row["Required age"],
             price=row["Price"],
             dlc_count=row["DLC count"],
@@ -90,7 +106,9 @@ def import_sample_events():
             filepath=row["filepath"],
             encoding=row["encoding"],
             delimiter=row["delimiter"],
-            created_at=datetime.utcnow() if pd.isnull(row["created_at"]) else row["created_at"],
+            created_at=(
+                datetime.utcnow() if pd.isnull(row["created_at"]) else row["created_at"]
+            ),
         )
         db.session.add(event)
     db.session.commit()
