@@ -9,9 +9,12 @@ from flask import request
 from flask_restx import Api, Namespace, Resource, fields, reqparse
 from werkzeug.utils import secure_filename
 
+from flask import jsonify
+
+
 from . import db, limiter
 from .models import Event, GameData
-from .utils import query_aggregate_data, save_csv_to_db
+from .utils import query_aggregate_data, save_csv_to_db,get_similar_games
 
 load_dotenv()
 authorizations = {"apikey": {"type": "apiKey", "in": "header", "name": "X-API-Key"}}
@@ -343,3 +346,22 @@ class StatsData(Resource):
             return {"error": str(e)}, 400
         except Exception as e:
             return {"error": str(e)}, 500
+
+@api.route("/similar_games")
+class SimilarGames(Resource):
+    @api.doc(
+        params={
+            "name": {"description": "Name of the game to find similar games", "type": "string", "required": True}
+        }
+    )
+    @limiter.limit("10 per minute")
+    def get(self):
+        game_name = request.args.get('name', '')
+        if game_name:
+            similar, matched_name = get_similar_games(game_name)
+            return {
+                'matched_game': matched_name,
+                'similar_games': similar
+            }, 200
+        else:
+            return {'error': 'Please provide a game name'}, 400

@@ -6,6 +6,48 @@ from sqlalchemy import func
 
 from . import db
 from .models import Event, GameData
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from fuzzywuzzy import process
+
+
+def load_game_data():
+    games = GameData.query.all()
+    data = [{
+        'Name': game.name,
+        'About the game': game.about_game,
+        'Categories': game.categories,
+        'Genres': game.genres,
+        'Tags': game.tags
+    } for game in games]
+    df = pd.DataFrame(data)
+    df['combined_features'] = df['About the game'] + ' ' + df['Categories'] + ' ' + df['Genres'] + ' ' + df['Tags']
+    df['combined_features'] = df['combined_features'].fillna('')
+    return df
+
+def get_similar_games(game_name):
+    df = load_game_data()
+    
+    # TF-IDF Vectorization
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
+    
+    # Calculate cosine similarity
+    cosine_sim = cosine_similarity(tfidf_matrix)
+    
+    # Find the most similar game name in the dataset
+    closest_match = find_most_similar_game(game_name, df['Name'].tolist())
+    
+    idx = df.index[df['Name'] == closest_match].tolist()[0]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    sim_scores = sim_scores[1:11]  # Top 10 similar games
+    game_indices = [i[0] for i in sim_scores]
+    return df['Name'].iloc[game_indices].tolist(), closest_match
+
+def find_most_similar_game(input_name, names):
+    match = process.extractOne(input_name, names)
+    return match[0] if match else None
 
 
 def parse_date(date_str):
