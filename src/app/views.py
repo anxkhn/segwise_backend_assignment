@@ -1,15 +1,17 @@
 import os
 import time
+from datetime import datetime
 from functools import wraps
+
 import requests
 from dotenv import load_dotenv
 from flask import request
 from flask_restx import Api, Namespace, Resource, fields, reqparse
 from werkzeug.utils import secure_filename
-from datetime import datetime
+
 from . import db, limiter
 from .models import Event, GameData
-from .utils import save_csv_to_db, query_aggregate_data
+from .utils import query_aggregate_data, save_csv_to_db
 
 load_dotenv()
 authorizations = {"apikey": {"type": "apiKey", "in": "header", "name": "X-API-Key"}}

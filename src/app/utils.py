@@ -1,9 +1,11 @@
-from . import db
-from .models import GameData, Event
-import pandas as pd
 from datetime import datetime
-from sqlalchemy import func
+
+import pandas as pd
 from flask import jsonify
+from sqlalchemy import func
+
+from . import db
+from .models import Event, GameData
 
 
 def parse_date(date_str):
@@ -78,10 +80,7 @@ def query_aggregate_data(aggregate, column=None):
         column_attr = getattr(GameData, column)
         if aggregate == "max":
             result = {
-                column: {
-                    "max": query.with_entities(
-                        func.max(column_attr)).scalar()
-                }
+                column: {"max": query.with_entities(func.max(column_attr)).scalar()}
             }
         elif aggregate == "min":
             result = {
