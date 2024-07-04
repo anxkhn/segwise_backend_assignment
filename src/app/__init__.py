@@ -48,7 +48,7 @@ def create_app():
         if not db.session.query(views.GameData).first():
             from .utils import import_sample_data, import_sample_events
 
-            import_sample_data()
             import_sample_events()
+            import_sample_data()
 
     return app

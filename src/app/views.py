@@ -181,6 +181,27 @@ class ImportCSV(Resource):
 
 @api.route("/query")
 class QueryData(Resource):
+    @api.doc(params={
+        'app_id': {'description': 'App ID', 'type': 'integer'},
+        'name': {'description': 'Name of the game', 'type': 'string'},
+        'release_date': {'description': 'Release date of the game', 'type': 'string', 'format': 'date'},
+        'required_age': {'description': 'Required age to play the game', 'type': 'integer'},
+        'price': {'description': 'Price of the game', 'type': 'number'},
+        'dlc_count': {'description': 'Number of DLCs', 'type': 'integer'},
+        'about_game': {'description': 'Description of the game', 'type': 'string'},
+        'supported_languages': {'description': 'Supported languages', 'type': 'string'},
+        'windows': {'description': 'Windows support', 'type': 'boolean'},
+        'mac': {'description': 'Mac support', 'type': 'boolean'},
+        'linux': {'description': 'Linux support', 'type': 'boolean'},
+        'positive': {'description': 'Number of positive reviews', 'type': 'integer'},
+        'negative': {'description': 'Number of negative reviews', 'type': 'integer'},
+        'score_rank': {'description': 'Score rank of the game', 'type': 'integer'},
+        'developers': {'description': 'Developers of the game', 'type': 'string'},
+        'publishers': {'description': 'Publishers of the game', 'type': 'string'},
+        'categories': {'description': 'Categories of the game', 'type': 'string'},
+        'genres': {'description': 'Genres of the game', 'type': 'string'},
+        'tags': {'description': 'Tags of the game', 'type': 'string'},
+    })
     @limiter.limit("10 per minute")
     def get(self):
         filters = request.args.to_dict()
@@ -190,23 +211,25 @@ class QueryData(Resource):
         except Exception as e:
             return {"error": str(e)}, 500
 
-
 def query_data(filters):
     query = db.session.query(GameData)
-
     for key, value in filters.items():
+        print(key, value,hasattr(GameData, "linux"))
         if hasattr(GameData, key):
             column = getattr(GameData, key)
-            # For numerical fields, exact match
+            # Convert the value to the appropriate type
             if column.property.columns[0].type.python_type in (int, float):
+                value = column.property.columns[0].type.python_type(value)
                 query = query.filter(column == value)
-            # For string fields, substring match
             elif column.property.columns[0].type.python_type is str:
                 query = query.filter(column.contains(value))
-            # For other types, exact match
+            elif column.property.columns[0].type.python_type is bool:
+                value = value.lower() in ['true', '1', 'yes']
+                query = query.filter(column == value)
             else:
                 query = query.filter(column == value)
-
+        else:
+            print(f"Attribute {key} not found in GameData model")
     results = []
     for row in query.all():
         results.append(

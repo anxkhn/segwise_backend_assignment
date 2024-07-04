@@ -1,7 +1,8 @@
-import pandas as pd
-
 from . import db
-from .models import GameData
+from .models import GameData, Event 
+import pandas as pd
+from datetime import datetime
+
 
 
 def save_csv_to_db(csv_file_path, encoding="utf-8", delimiter=",", event_id=None):
@@ -47,7 +48,7 @@ def query_data(filters):
 
 
 def import_sample_data():
-    sample_csv_path = "sample.csv"
+    sample_csv_path = "sample_gamedata.csv"
     data = pd.read_csv(sample_csv_path)
     data = data.where(pd.notnull(data), None)  # Replace NaNs with None
     for _, row in data.iterrows():
@@ -83,13 +84,13 @@ def import_sample_events():
     data = data.where(pd.notnull(data), None)  # Replace NaNs with None
     for _, row in data.iterrows():
         event = Event(
-            original_url=row["Original URL"],
-            mode=row["Mode"],
-            altname=row["Altname"],
-            filepath=row["Filepath"],
-            encoding=row["Encoding"],
-            delimiter=row["Delimiter"],
-            created_at=row["Created at"],
+            original_url=row["original_url"],
+            mode=row["mode"],
+            altname=row["altname"],
+            filepath=row["filepath"],
+            encoding=row["encoding"],
+            delimiter=row["delimiter"],
+            created_at=datetime.utcnow() if pd.isnull(row["created_at"]) else row["created_at"],
         )
         db.session.add(event)
     db.session.commit()
