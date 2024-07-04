@@ -201,20 +201,27 @@ class QueryData(Resource):
         'categories': {'description': 'Categories of the game', 'type': 'string'},
         'genres': {'description': 'Genres of the game', 'type': 'string'},
         'tags': {'description': 'Tags of the game', 'type': 'string'},
+        'cursor': {'description': 'Cursor for pagination', 'type': 'integer', 'default': 0},
+        'limit': {'description': 'Limit for pagination', 'type': 'integer', 'default': 10},
     })
     @limiter.limit("10 per minute")
     def get(self):
         filters = request.args.to_dict()
+        cursor = int(filters.pop('cursor', 0))
+        limit = int(filters.pop('limit', 10))
         try:
-            results = query_data(filters)
-            return results, 200
+            results, total = query_data(filters, cursor, limit)
+            return {
+                "status": f"{total} found",
+                "results": results,
+                "cursor": cursor + limit if cursor + limit < total else None
+            }, 200
         except Exception as e:
             return {"error": str(e)}, 500
 
-def query_data(filters):
+def query_data(filters, cursor, limit):
     query = db.session.query(GameData)
     for key, value in filters.items():
-        print(key, value,hasattr(GameData, "linux"))
         if hasattr(GameData, key):
             column = getattr(GameData, key)
             # Convert the value to the appropriate type
@@ -230,6 +237,10 @@ def query_data(filters):
                 query = query.filter(column == value)
         else:
             print(f"Attribute {key} not found in GameData model")
+    
+    total = query.count()
+    query = query.offset(cursor).limit(limit)
+    
     results = []
     for row in query.all():
         results.append(
@@ -256,4 +267,4 @@ def query_data(filters):
             }
         )
 
-    return results
+    return results, total
