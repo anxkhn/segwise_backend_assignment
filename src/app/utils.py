@@ -2,6 +2,8 @@ from . import db
 from .models import GameData, Event
 import pandas as pd
 from datetime import datetime
+from sqlalchemy import func
+from flask import jsonify
 
 
 def parse_date(date_str):
@@ -61,6 +63,85 @@ def query_data(filters):
             else:
                 query = query.filter(column == value)
     return [data.as_dict() for data in query.all()]
+
+
+def query_aggregate_data(aggregate, column=None):
+    allowed_columns = ["price", "dlc_count", "positive", "negative"]
+
+    if column and column not in allowed_columns and column != "all":
+        raise ValueError(f"Column {column} is not allowed for aggregation")
+
+    query = db.session.query(GameData)
+    result = {}
+
+    if column and column != "all":
+        column_attr = getattr(GameData, column)
+        if aggregate == "max":
+            result = {
+                column: {
+                    "max": query.with_entities(
+                        func.max(column_attr)).scalar()
+                }
+            }
+        elif aggregate == "min":
+            result = {
+                column: {"min": query.with_entities(func.min(column_attr)).scalar()}
+            }
+        elif aggregate == "avg":
+            result = {
+                column: {"avg": query.with_entities(func.avg(column_attr)).scalar()}
+            }
+        else:
+            result = {
+                "min": query.with_entities(func.min(column_attr)).scalar(),
+                "max": query.with_entities(func.max(column_attr)).scalar(),
+                "avg": query.with_entities(func.avg(column_attr)).scalar(),
+            }
+    elif column == "all" or not column:
+        if aggregate == "max":
+            result = {
+                col: {
+                    "max": query.with_entities(
+                        func.max(getattr(GameData, col))
+                    ).scalar()
+                }
+                for col in allowed_columns
+            }
+        elif aggregate == "min":
+            result = {
+                col: {
+                    "min": query.with_entities(
+                        func.min(getattr(GameData, col))
+                    ).scalar()
+                }
+                for col in allowed_columns
+            }
+        elif aggregate == "avg":
+            result = {
+                col: {
+                    "avg": query.with_entities(
+                        func.avg(getattr(GameData, col))
+                    ).scalar()
+                }
+                for col in allowed_columns
+            }
+        else:
+            result = {
+                col: {
+                    "min": query.with_entities(
+                        func.min(getattr(GameData, col))
+                    ).scalar(),
+                    "max": query.with_entities(
+                        func.max(getattr(GameData, col))
+                    ).scalar(),
+                    "avg": query.with_entities(
+                        func.avg(getattr(GameData, col))
+                    ).scalar(),
+                }
+                for col in allowed_columns
+            }
+
+    return result
 
 
 def import_sample_data():

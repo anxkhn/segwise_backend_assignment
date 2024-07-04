@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 from . import db, limiter
 from .models import Event, GameData
-from .utils import save_csv_to_db
+from .utils import save_csv_to_db, query_aggregate_data
 
 load_dotenv()
 authorizations = {"apikey": {"type": "apiKey", "in": "header", "name": "X-API-Key"}}
@@ -297,3 +297,47 @@ def query_data(filters, cursor, limit):
             }
         )
     return results, total
+
+
+@api.route("/stats")
+class StatsData(Resource):
+    @api.doc(
+        params={
+            "aggregate": {
+                "description": "Type of aggregate function (max, min, mean)",
+                "type": "string",
+                "enum": ["all", "max", "min", "mean"],
+                "required": True,
+            },
+            "column": {
+                "description": "Column to apply the aggregate function on (price, dlc_count, positive, negative)",
+                "type": "string",
+                "enum": ["all", "price", "dlc_count", "positive", "negative"],
+                "required": True,
+            },
+        }
+    )
+    @limiter.limit("10 per minute")
+    def get(self):
+        aggregate = request.args.get("aggregate")
+        column = request.args.get("column")
+
+        if aggregate not in ["all", "total", "max", "min", "mean"]:
+            return {"error": "Invalid aggregate function"}, 400
+
+        if column and column not in [
+            "all",
+            "price",
+            "dlc_count",
+            "positive",
+            "negative",
+        ]:
+            return {"error": f"Column {column} does not exist or is not allowed"}, 400
+
+        try:
+            result = query_aggregate_data(aggregate, column)
+            return {"result": result}, 200
+        except ValueError as e:
+            return {"error": str(e)}, 400
+        except Exception as e:
+            return {"error": str(e)}, 500
