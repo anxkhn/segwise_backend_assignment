@@ -2,48 +2,63 @@ from datetime import datetime
 
 import pandas as pd
 from flask import jsonify
+from fuzzywuzzy import process
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import func
+import numpy as np
+from scipy.stats import skew, kurtosis
 
 from . import db
 from .models import Event, GameData
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from fuzzywuzzy import process
 
 
 def load_game_data():
     games = GameData.query.all()
-    data = [{
-        'Name': game.name,
-        'About the game': game.about_game,
-        'Categories': game.categories,
-        'Genres': game.genres,
-        'Tags': game.tags
-    } for game in games]
+    data = [
+        {
+            "Name": game.name,
+            "About the game": game.about_game,
+            "Categories": game.categories,
+            "Genres": game.genres,
+            "Tags": game.tags,
+        }
+        for game in games
+    ]
     df = pd.DataFrame(data)
-    df['combined_features'] = df['About the game'] + ' ' + df['Categories'] + ' ' + df['Genres'] + ' ' + df['Tags']
-    df['combined_features'] = df['combined_features'].fillna('')
+    df["combined_features"] = (
+        df["About the game"]
+        + " "
+        + df["Categories"]
+        + " "
+        + df["Genres"]
+        + " "
+        + df["Tags"]
+    )
+    df["combined_features"] = df["combined_features"].fillna("")
     return df
+
 
 def get_similar_games(game_name):
     df = load_game_data()
-    
+
     # TF-IDF Vectorization
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
-    
+    tfidf = TfidfVectorizer(stop_words="english")
+    tfidf_matrix = tfidf.fit_transform(df["combined_features"])
+
     # Calculate cosine similarity
     cosine_sim = cosine_similarity(tfidf_matrix)
-    
+
     # Find the most similar game name in the dataset
-    closest_match = find_most_similar_game(game_name, df['Name'].tolist())
-    
-    idx = df.index[df['Name'] == closest_match].tolist()[0]
+    closest_match = find_most_similar_game(game_name, df["Name"].tolist())
+
+    idx = df.index[df["Name"] == closest_match].tolist()[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     sim_scores = sim_scores[1:11]  # Top 10 similar games
     game_indices = [i[0] for i in sim_scores]
-    return df['Name'].iloc[game_indices].tolist(), closest_match
+    return df["Name"].iloc[game_indices].tolist(), closest_match
+
 
 def find_most_similar_game(input_name, names):
     match = process.extractOne(input_name, names)
@@ -108,80 +123,104 @@ def query_data(filters):
                 query = query.filter(column == value)
     return [data.as_dict() for data in query.all()]
 
-
 def query_aggregate_data(aggregate, column=None):
     allowed_columns = ["price", "dlc_count", "positive", "negative"]
-
+    
     if column and column not in allowed_columns and column != "all":
         raise ValueError(f"Column {column} is not allowed for aggregation")
-
+    
     query = db.session.query(GameData)
     result = {}
-
     if column and column != "all":
         column_attr = getattr(GameData, column)
-        if aggregate == "max":
+        data = [row[0] for row in query.with_entities(column_attr).all()]
+        
+        if not data:
+            raise ValueError(f"No data found for column {column}")
+        
+        if aggregate == "all":
             result = {
-                column: {"max": query.with_entities(func.max(column_attr)).scalar()}
+                column: {
+                    "min": min(data),
+                    "max": max(data),
+                    "median": np.median(data),
+                    "mean": np.mean(data),
+                    "range": max(data) - min(data),
+                    "iqr": np.percentile(data, 75) - np.percentile(data, 25),
+                    "std_dev": np.std(data),
+                    "variance": np.var(data),
+                    "sum": sum(data),
+                    "count": len(data),
+                    "percentiles": {
+                        "25th": np.percentile(data, 25),
+                        "50th": np.percentile(data, 50),
+                        "75th": np.percentile(data, 75),
+                    },
+                    "skewness": skew(data),
+                    "kurtosis": kurtosis(data),
+                }
             }
         elif aggregate == "min":
+            result = {column: {"min": min(data)}}
+        elif aggregate == "max":
+            result = {column: {"max": max(data)}}
+        elif aggregate == "median":
+            result = {column: {"median": np.median(data)}}
+        elif aggregate == "mean":
+            result = {column: {"mean": np.mean(data)}}
+        elif aggregate == "range":
+            result = {column: {"range": max(data) - min(data)}}
+        elif aggregate == "iqr":
+            result = {column: {"iqr": np.percentile(data, 75) - np.percentile(data, 25)}}
+        elif aggregate == "std_dev":
+            result = {column: {"std_dev": np.std(data)}}
+        elif aggregate == "variance":
+            result = {column: {"variance": np.var(data)}}
+        elif aggregate == "sum":
+            result = {column: {"sum": sum(data)}}
+        elif aggregate == "count":
+            result = {column: {"count": len(data)}}
+        elif aggregate == "percentiles":
             result = {
-                column: {"min": query.with_entities(func.min(column_attr)).scalar()}
+                column: {
+                    "percentiles": {
+                        "25th": np.percentile(data, 25),
+                        "50th": np.percentile(data, 50),
+                        "75th": np.percentile(data, 75),
+                    }
+                }
             }
-        elif aggregate == "avg":
-            result = {
-                column: {"avg": query.with_entities(func.avg(column_attr)).scalar()}
-            }
-        else:
-            result = {
-                "min": query.with_entities(func.min(column_attr)).scalar(),
-                "max": query.with_entities(func.max(column_attr)).scalar(),
-                "avg": query.with_entities(func.avg(column_attr)).scalar(),
-            }
+        elif aggregate == "skewness":
+            result = {column: {"skewness": skew(data)}}
+        elif aggregate == "kurtosis":
+            result = {column: {"kurtosis": kurtosis(data)}}
     elif column == "all" or not column:
-        if aggregate == "max":
-            result = {
-                col: {
-                    "max": query.with_entities(
-                        func.max(getattr(GameData, col))
-                    ).scalar()
-                }
-                for col in allowed_columns
+        for col in allowed_columns:
+            column_attr = getattr(GameData, col)
+            data = [row[0] for row in query.with_entities(column_attr).all()]
+            if not data:
+                continue
+            print(data)
+            result[col] = {
+                "min": min(data),
+                "max": max(data),
+                "median": np.median(data),
+                "mean": np.mean(data),
+                "range": max(data) - min(data),
+                "iqr": np.percentile(data, 75) - np.percentile(data, 25),
+                "std_dev": np.std(data),
+                "variance": np.var(data),
+                "sum": sum(data),
+                "count": len(data),
+                "percentiles": {
+                    "25th": np.percentile(data, 25),
+                    "50th": np.percentile(data, 50),
+                    "75th": np.percentile(data, 75),
+                },
+                "skewness": skew(data),
+                "kurtosis": kurtosis(data),
             }
-        elif aggregate == "min":
-            result = {
-                col: {
-                    "min": query.with_entities(
-                        func.min(getattr(GameData, col))
-                    ).scalar()
-                }
-                for col in allowed_columns
-            }
-        elif aggregate == "avg":
-            result = {
-                col: {
-                    "avg": query.with_entities(
-                        func.avg(getattr(GameData, col))
-                    ).scalar()
-                }
-                for col in allowed_columns
-            }
-        else:
-            result = {
-                col: {
-                    "min": query.with_entities(
-                        func.min(getattr(GameData, col))
-                    ).scalar(),
-                    "max": query.with_entities(
-                        func.max(getattr(GameData, col))
-                    ).scalar(),
-                    "avg": query.with_entities(
-                        func.avg(getattr(GameData, col))
-                    ).scalar(),
-                }
-                for col in allowed_columns
-            }
-
+    
     return result
 
 
@@ -229,7 +268,8 @@ def import_sample_events():
             encoding=row["encoding"],
             delimiter=row["delimiter"],
             created_at=(
-                datetime.utcnow() if pd.isnull(row["created_at"]) else row["created_at"]
+                datetime.utcnow() if pd.isnull(
+                    row["created_at"]) else row["created_at"]
             ),
         )
         db.session.add(event)

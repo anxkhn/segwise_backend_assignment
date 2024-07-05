@@ -5,19 +5,17 @@ from functools import wraps
 
 import requests
 from dotenv import load_dotenv
-from flask import request
+from flask import jsonify, request
 from flask_restx import Api, Namespace, Resource, fields, reqparse
 from werkzeug.utils import secure_filename
 
-from flask import jsonify
-
-
 from . import db, limiter
 from .models import Event, GameData
-from .utils import query_aggregate_data, save_csv_to_db,get_similar_games
+from .utils import get_similar_games, query_aggregate_data, save_csv_to_db
 
 load_dotenv()
-authorizations = {"apikey": {"type": "apiKey", "in": "header", "name": "X-API-Key"}}
+authorizations = {"apikey": {"type": "apiKey",
+                             "in": "header", "name": "X-API-Key"}}
 api = Namespace(
     "api",
     description="Game data operations",
@@ -26,7 +24,8 @@ api = Namespace(
 )
 csv_upload = api.model(
     "CSVUpload",
-    {"csv_file": fields.Raw(required=True, description="The CSV file to upload")},
+    {"csv_file": fields.Raw(
+        required=True, description="The CSV file to upload")},
 )
 UPLOAD_FOLDER = "uploads/"
 ALLOWED_EXTENSIONS = {"csv"}
@@ -309,9 +308,13 @@ class StatsData(Resource):
     @api.doc(
         params={
             "aggregate": {
-                "description": "Type of aggregate function (max, min, mean)",
+                "description": "Type of aggregate function",
                 "type": "string",
-                "enum": ["all", "max", "min", "mean"],
+                "enum": [
+                    "all", "min", "max", "median", "mean", "range", "iqr", 
+                    "std_dev", "variance", "sum", "count", 
+                    "percentiles", "skewness", "kurtosis"
+                ],
                 "required": True,
             },
             "column": {
@@ -327,16 +330,14 @@ class StatsData(Resource):
         aggregate = request.args.get("aggregate")
         column = request.args.get("column")
 
-        if aggregate not in ["all", "total", "max", "min", "mean"]:
+        if aggregate not in [
+            "all", "min", "max", "median", "mean", "range", "iqr", 
+            "std_dev", "variance", "sum", "count", 
+            "percentiles", "skewness", "kurtosis"
+        ]:
             return {"error": "Invalid aggregate function"}, 400
 
-        if column and column not in [
-            "all",
-            "price",
-            "dlc_count",
-            "positive",
-            "negative",
-        ]:
+        if column and column not in ["all", "price", "dlc_count", "positive", "negative"]:
             return {"error": f"Column {column} does not exist or is not allowed"}, 400
 
         try:
@@ -351,17 +352,18 @@ class StatsData(Resource):
 class SimilarGames(Resource):
     @api.doc(
         params={
-            "name": {"description": "Name of the game to find similar games", "type": "string", "required": True}
+            "name": {
+                "description": "Name of the game to find similar games",
+                "type": "string",
+                "required": True,
+            }
         }
     )
     @limiter.limit("10 per minute")
     def get(self):
-        game_name = request.args.get('name', '')
+        game_name = request.args.get("name", "")
         if game_name:
             similar, matched_name = get_similar_games(game_name)
-            return {
-                'matched_game': matched_name,
-                'similar_games': similar
-            }, 200
+            return {"matched_game": matched_name, "similar_games": similar}, 200
         else:
-            return {'error': 'Please provide a game name'}, 400
+            return {"error": "Please provide a game name"}, 400
