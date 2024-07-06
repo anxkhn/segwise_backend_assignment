@@ -156,8 +156,8 @@ git clone https://github.com/anxkhn/segwise_backend_assignment.git
 
   - `DATABASE_URL` (Database connection string)
   - `SECRET_KEY` (Secret key for Flask app)
-  - RATELIMIT_DEFAULT (Rate limit for API endpoints)
-  - API_SECRET_KEY (Secret key for API authentication)
+  - `RATELIMIT_DEFAULT` (Rate limit for API endpoints)
+  - `API_SECRET_KEY` (Secret key for API authentication)
 
 ## Running the application
 
@@ -232,6 +232,59 @@ docker-compose up --build
 ```
 
 The API will be accessible at `http://localhost:8000`.
+
+### Swagger UI Integration
+
+#### `/docs`
+
+Swagger UI provides an interactive documentation interface for exploring the API endpoints. It offers a user-friendly way to understand the available endpoints, their parameters, and expected responses.
+
+- **Screenshot 1**: Overview of the Swagger UI interface.
+  ![Screenshot 1](docs/screenshots/screenshot1.png)
+
+#### Ping (HealthCheck)
+
+- **Screenshot 2**: Shows API key authentication for the `/upload_csv` and `/import_csv` endpoints.
+  ![Screenshot 2](docs/screenshots/screenshot3.png)
+
+- **Screenshot 3**: Shows the endpoint for health check (`GET /ping`).
+  ![Screenshot 6](docs/screenshots/screenshot6.png)
+  ![Screenshot 3](docs/screenshots/screenshot21.png)
+
+#### Import CSV
+
+- **Screenshot 4,5 & 6**: Illustrates the endpoint for importing CSVs (`GET /api/import_csv`) in Swagger UI.
+  ![Screenshot 4](docs/screenshots/screenshot4.png)
+
+  ![Screenshot 5](docs/screenshots/screenshot5.png)
+
+- **Screenshot 7**: Shows an example of a response when fetching queries using the `/api/query` endpoint.
+  ![Screenshot 7](docs/screenshots/screenshot7.png)
+  ![Screenshot 8](docs/screenshots/screenshot8.png)
+  ![Screenshot 9](docs/screenshots/screenshot9.png)
+  ![Screenshot 10](docs/screenshots/screenshot10.png)
+
+  - **Screenshot 12**: Shows an example of a response when fetching games released between certain dates using the `/api/query` endpoint.
+
+  ![Screenshot 12](docs/screenshots/screenshot12.png)
+
+- **Screenshot 14**: Shows an example of a response when fetching games demonstrating multiple queries using the `/api/query` endpoint.
+
+  ![Screenshot 14](docs/screenshots/screenshot14.png)
+
+  - **Screenshot 15**: Shows an example of a response when fetching games demonstrating finding games using fizzy search and finding similar games using cosine similarity using the `/api/similar_games` endpoint.
+
+  ![Screenshot 15](docs/screenshots/screenshot15.png)
+  ![Screenshot 16](docs/screenshots/screenshot16.png)
+
+- **Screenshot 17**: Shows an example of a response when fetching games demonstrating fetching all stats of all games in database using `/api/stats` endpoint.
+
+  ![Screenshot 17](docs/screenshots/screenshot17.png)
+  ![Screenshot 18](docs/screenshots/screenshot18.png)
+
+- **Screenshot 19**: Illustrates the endpoint for importing CSVs via user upload (`GET /api/upload_csv`) in Swagger UI.
+
+  ![Screenshot 19](docs/screenshots/screenshot19.png)
 
 ### API Endpoints
 
@@ -407,7 +460,9 @@ Note: The `import_csv` endpoint is used to import CSV files from a URL. This can
   ```
   GET /api/stats?aggregate=mean&column=all
   ```
-`
+
+  `
+
 - **Example Response** (Multiple columns):
   ```json
   {
@@ -428,64 +483,13 @@ Note: The `import_csv` endpoint is used to import CSV files from a URL. This can
   }
   ```
 
-### Swagger UI Integration
-
-#### `/docs`
-
-Swagger UI provides an interactive documentation interface for exploring the API endpoints. It offers a user-friendly way to understand the available endpoints, their parameters, and expected responses.
-
-- **Screenshot 1**: Overview of the Swagger UI interface.
-  ![Screenshot 1](docs/screenshots/screenshot1.png)
-
-#### Ping (HealthCheck)
-
-- **Screenshot 2**: Shows API key authentication for the `/upload_csv` and `/import_csv` endpoints.
-  ![Screenshot 2](docs/screenshots/screenshot3.png)
-
-- **Screenshot 3**: Shows the endpoint for health check (`GET /ping`).
-  ![Screenshot 6](docs/screenshots/screenshot6.png)
-  ![Screenshot 3](docs/screenshots/screenshot21.png)
-
-#### Import CSV
-
-- **Screenshot 4,5 & 6**: Illustrates the endpoint for importing CSVs (`GET /api/import_csv`) in Swagger UI.
-  ![Screenshot 4](docs/screenshots/screenshot4.png)
-
-  ![Screenshot 5](docs/screenshots/screenshot5.png)
-
-- **Screenshot 7**: Shows an example of a response when fetching queries using the `/api/query` endpoint.
-  ![Screenshot 7](docs/screenshots/screenshot7.png)
-  ![Screenshot 8](docs/screenshots/screenshot8.png)
-  ![Screenshot 9](docs/screenshots/screenshot9.png)
-  ![Screenshot 10](docs/screenshots/screenshot10.png)
-
-  - **Screenshot 12**: Shows an example of a response when fetching games released between certain dates using the `/api/query` endpoint.
-
-  ![Screenshot 12](docs/screenshots/screenshot12.png)
-
-- **Screenshot 14**: Shows an example of a response when fetching games demonstrating multiple queries using the `/api/query` endpoint.
-
-  ![Screenshot 14](docs/screenshots/screenshot14.png)
-
-  - **Screenshot 15**: Shows an example of a response when fetching games demonstrating finding games using fizzy search and finding similar games using cosine similarity using the `/api/similar_games` endpoint.
-
-  ![Screenshot 15](docs/screenshots/screenshot15.png)
-  ![Screenshot 16](docs/screenshots/screenshot16.png)
-
-- **Screenshot 17**: Shows an example of a response when fetching games demonstrating fetching all stats of all games in database using `/api/stats` endpoint.
-
-  ![Screenshot 17](docs/screenshots/screenshot17.png)
-  ![Screenshot 18](docs/screenshots/screenshot18.png)
-
-- **Screenshot 19**: Illustrates the endpoint for importing CSVs via user upload (`GET /api/upload_csv`) in Swagger UI.
-
-  ![Screenshot 19](docs/screenshots/screenshot19.png)
-
 ## Deployed Version
 
 A live version of the application is available at [https://segwiseaibackend.pythonanywhere.com/docs](https://segwiseaibackend.pythonanywhere.com/docs).
 
 The lite version of the application is deployed on PythonAnywhere, which can not support the full functionality of the application such as ML based Game Similarity and large CSV uploads.
+
+The source code for stripped down version of the application is available in the `pythonanywhere` branch of the repository.
 
 Please be mindful of the limitations of PythonAnywhere.
 
@@ -493,7 +497,7 @@ Upon accessing the deployed version, please note the following:
 
 1. **Cold Start Delay**: There might be a delay of up to 5 seconds for the initial response due to the nature of free services on PythonAnywhere. This delay occurs during the startup of the server, please refresh once if you face this issue.
 
-2. **Health Check**: To ensure that the server is operational, you can access the `/ping` endpoint [here](https://segwiseaibackend.pythonanywhere.com/docs/ping). A successful response indicates that the server is healthy and operational.
+2. **Health Check**: To ensure that the server is operational, you can access the `/ping` endpoint [here](https://segwiseaibackend.pythonanywhere.com/ping). A successful response indicates that the server is healthy and operational.
 
 Please note that the deployed version might experience frequent downtime or performance issues due to resource limitations in the free tier. Therefore, it is **not recommeneded** to explore the API endpoints and functionality of the project without setting up the application locally.
 
