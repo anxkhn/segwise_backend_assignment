@@ -1,13 +1,13 @@
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from flask import jsonify
 from fuzzywuzzy import process
+from scipy.stats import kurtosis, skew
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import func
-import numpy as np
-from scipy.stats import skew, kurtosis
 
 from . import db
 from .models import Event, GameData
@@ -17,27 +17,29 @@ def load_game_data():
     games = GameData.query.all()
     data = [
         {
-            "Name": game.name,
-            "About the game": game.about_game,
-            "Categories": game.categories,
-            "Genres": game.genres,
-            "Tags": game.tags,
+            "app_id": game.app_id,
+            "name": game.name,
+            "release_date": game.release_date,
+            "price": game.price,
+            "about_game": game.about_game,
+            "categories": game.categories,
+            "genres": game.genres,
+            "tags": game.tags,
         }
         for game in games
     ]
     df = pd.DataFrame(data)
     df["combined_features"] = (
-        df["About the game"]
+        df["about_game"]
         + " "
-        + df["Categories"]
+        + df["categories"]
         + " "
-        + df["Genres"]
+        + df["genres"]
         + " "
-        + df["Tags"]
+        + df["tags"]
     )
     df["combined_features"] = df["combined_features"].fillna("")
     return df
-
 
 def get_similar_games(game_name):
     df = load_game_data()
@@ -50,15 +52,36 @@ def get_similar_games(game_name):
     cosine_sim = cosine_similarity(tfidf_matrix)
 
     # Find the most similar game name in the dataset
-    closest_match = find_most_similar_game(game_name, df["Name"].tolist())
+    closest_match = find_most_similar_game(game_name, df["name"].tolist())
 
-    idx = df.index[df["Name"] == closest_match].tolist()[0]
+    idx = df.index[df["name"] == closest_match].tolist()[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     sim_scores = sim_scores[1:11]  # Top 10 similar games
     game_indices = [i[0] for i in sim_scores]
-    return df["Name"].iloc[game_indices].tolist(), closest_match
 
+    similar_games_info = [
+        {
+            "app_id": int(df.iloc[i]["app_id"]),
+            "name": df.iloc[i]["name"],
+            "release_date": df.iloc[i]["release_date"].strftime("%Y-%m-%d") if isinstance(df.iloc[i]["release_date"], datetime) else df.iloc[i]["release_date"],
+            "price": float(df.iloc[i]["price"]),
+            "similarity_score": float(sim_scores[idx][1])
+        }
+        for idx, i in enumerate(game_indices)
+    ]
+    
+    result = {
+        "closest_match": {
+            "app_id": int(df.loc[idx, "app_id"]),
+            "name": df.loc[idx, "name"],
+            "release_date": df.loc[idx, "release_date"].strftime("%Y-%m-%d") if isinstance(df.loc[idx, "release_date"], datetime) else df.loc[idx, "release_date"],
+            "price": float(df.loc[idx, "price"])
+        },
+        "similar_games": similar_games_info
+    }
+    
+    return result
 
 def find_most_similar_game(input_name, names):
     match = process.extractOne(input_name, names)
@@ -123,21 +146,22 @@ def query_data(filters):
                 query = query.filter(column == value)
     return [data.as_dict() for data in query.all()]
 
+
 def query_aggregate_data(aggregate, column=None):
     allowed_columns = ["price", "dlc_count", "positive", "negative"]
-    
+
     if column and column not in allowed_columns and column != "all":
         raise ValueError(f"Column {column} is not allowed for aggregation")
-    
+
     query = db.session.query(GameData)
     result = {}
     if column and column != "all":
         column_attr = getattr(GameData, column)
         data = [row[0] for row in query.with_entities(column_attr).all()]
-        
+
         if not data:
             raise ValueError(f"No data found for column {column}")
-        
+
         if aggregate == "all":
             result = {
                 column: {
@@ -171,7 +195,10 @@ def query_aggregate_data(aggregate, column=None):
         elif aggregate == "range":
             result = {column: {"range": max(data) - min(data)}}
         elif aggregate == "iqr":
-            result = {column: {"iqr": np.percentile(data, 75) - np.percentile(data, 25)}}
+            result = {
+                column: {"iqr": np.percentile(
+                    data, 75) - np.percentile(data, 25)}
+            }
         elif aggregate == "std_dev":
             result = {column: {"std_dev": np.std(data)}}
         elif aggregate == "variance":
@@ -200,7 +227,6 @@ def query_aggregate_data(aggregate, column=None):
             data = [row[0] for row in query.with_entities(column_attr).all()]
             if not data:
                 continue
-            print(data)
             result[col] = {
                 "min": min(data),
                 "max": max(data),
@@ -220,7 +246,7 @@ def query_aggregate_data(aggregate, column=None):
                 "skewness": skew(data),
                 "kurtosis": kurtosis(data),
             }
-    
+
     return result
 
 

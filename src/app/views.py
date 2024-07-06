@@ -311,9 +311,20 @@ class StatsData(Resource):
                 "description": "Type of aggregate function",
                 "type": "string",
                 "enum": [
-                    "all", "min", "max", "median", "mean", "range", "iqr", 
-                    "std_dev", "variance", "sum", "count", 
-                    "percentiles", "skewness", "kurtosis"
+                    "all",
+                    "min",
+                    "max",
+                    "median",
+                    "mean",
+                    "range",
+                    "iqr",
+                    "std_dev",
+                    "variance",
+                    "sum",
+                    "count",
+                    "percentiles",
+                    "skewness",
+                    "kurtosis",
                 ],
                 "required": True,
             },
@@ -331,13 +342,30 @@ class StatsData(Resource):
         column = request.args.get("column")
 
         if aggregate not in [
-            "all", "min", "max", "median", "mean", "range", "iqr", 
-            "std_dev", "variance", "sum", "count", 
-            "percentiles", "skewness", "kurtosis"
+            "all",
+            "min",
+            "max",
+            "median",
+            "mean",
+            "range",
+            "iqr",
+            "std_dev",
+            "variance",
+            "sum",
+            "count",
+            "percentiles",
+            "skewness",
+            "kurtosis",
         ]:
             return {"error": "Invalid aggregate function"}, 400
 
-        if column and column not in ["all", "price", "dlc_count", "positive", "negative"]:
+        if column and column not in [
+            "all",
+            "price",
+            "dlc_count",
+            "positive",
+            "negative",
+        ]:
             return {"error": f"Column {column} does not exist or is not allowed"}, 400
 
         try:
@@ -347,6 +375,7 @@ class StatsData(Resource):
             return {"error": str(e)}, 400
         except Exception as e:
             return {"error": str(e)}, 500
+
 
 @api.route("/similar_games")
 class SimilarGames(Resource):
@@ -363,7 +392,6 @@ class SimilarGames(Resource):
     def get(self):
         game_name = request.args.get("name", "")
         if game_name:
-            similar, matched_name = get_similar_games(game_name)
-            return {"matched_game": matched_name, "similar_games": similar}, 200
+            return get_similar_games(game_name), 200
         else:
             return {"error": "Please provide a game name"}, 400
