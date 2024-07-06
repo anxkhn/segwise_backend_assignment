@@ -84,7 +84,7 @@ class GameData(db.Model):
     tags = db.Column(db.String(255), nullable=True)
     event_id = db.Column(db.Integer, db.ForeignKey("event.id"), nullable=False)
 
-    def as_dict(self) -> Dict[str, Union[int, str, float, bool]]:
+    def to_dict(self) -> Dict[str, Union[int, str, float, bool]]:
         """
         Convert the GameData instance into a dictionary.
 
