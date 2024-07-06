@@ -244,10 +244,10 @@ Swagger UI provides an interactive documentation interface for exploring the API
 
 #### Ping (HealthCheck)
 
-- **Screenshot 2**: Shows API key authentication for the `/upload_csv` and `/import_csv` endpoints.
+- **Screenshot 2**: Shows API key authentication for the `/api/upload_csv` and `/api/import_csv` endpoints.
   ![Screenshot 2](docs/screenshots/screenshot3.png)
 
-- **Screenshot 3**: Shows the endpoint for health check (`GET /ping`).
+- **Screenshot 3**: Shows the endpoint for health check (`GET /api/ping`).
   ![Screenshot 6](docs/screenshots/screenshot6.png)
   ![Screenshot 3](docs/screenshots/screenshot21.png)
 
@@ -497,7 +497,7 @@ Upon accessing the deployed version, please note the following:
 
 1. **Cold Start Delay**: There might be a delay of up to 5 seconds for the initial response due to the nature of free services on PythonAnywhere. This delay occurs during the startup of the server, please refresh once if you face this issue.
 
-2. **Health Check**: To ensure that the server is operational, you can access the `/ping` endpoint [here](https://segwiseaibackend.pythonanywhere.com/ping). A successful response indicates that the server is healthy and operational.
+2. **Health Check**: To ensure that the server is operational, you can access the `/api/ping` endpoint [here](https://segwiseaibackend.pythonanywhere.com/api/ping). A successful response indicates that the server is healthy and operational.
 
 Please note that the deployed version might experience frequent downtime or performance issues due to resource limitations in the free tier. Therefore, it is **not recommeneded** to explore the API endpoints and functionality of the project without setting up the application locally.
 
