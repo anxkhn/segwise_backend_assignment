@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -147,16 +147,67 @@ def save_csv_to_db(
     db.session.commit()
 
 
-def query_data(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-    query = GameData.query
+def query_data(
+    filters: Dict[str, Any], cursor: int, limit: int
+) -> Tuple[List[Dict[str, Any]], int]:
+    query = db.session.query(GameData)
     for key, value in filters.items():
-        if hasattr(GameData, key):
-            column = getattr(GameData, key)
-            if isinstance(value, str):
-                query = query.filter(column.ilike(f"%{value}%"))
+        if key == "before":
+            date_value = datetime.strptime(value, "%Y-%m-%d").date()
+            query = query.filter(GameData.release_date < date_value)
+        elif key == "after":
+            date_value = datetime.strptime(value, "%Y-%m-%d").date()
+            query = query.filter(GameData.release_date > date_value)
+        elif key == "release_date":
+            date_value = datetime.strptime(value, "%Y-%m-%d").date()
+            query = query.filter(GameData.release_date == date_value)
+        elif key == "min_price":
+            query = query.filter(GameData.price >= float(value))
+        elif key == "max_price":
+            query = query.filter(GameData.price <= float(value))
+        else:
+            if hasattr(GameData, key):
+                column = getattr(GameData, key)
+                if column.property.columns[0].type.python_type in (int, float):
+                    value = column.property.columns[0].type.python_type(value)
+                    query = query.filter(column == value)
+                elif column.property.columns[0].type.python_type is str:
+                    query = query.filter(column.contains(value))
+                elif column.property.columns[0].type.python_type is bool:
+                    value = value.lower() in ["true", "1", "yes"]
+                    query = query.filter(column == value)
+                else:
+                    query = query.filter(column == value)
             else:
-                query = query.filter(column == value)
-    return [data.as_dict() for data in query.all()]
+                print(f"Attribute {key} not found in GameData model")
+    total = query.count()
+    query = query.offset(cursor).limit(limit)
+    results = []
+    for row in query.all():
+        results.append(
+            {
+                "AppID": row.app_id,
+                "Name": row.name,
+                "Release date": row.release_date,
+                "Required age": row.required_age,
+                "Price": row.price,
+                "DLC count": row.dlc_count,
+                "About the game": row.about_game,
+                "Supported languages": row.supported_languages,
+                "Windows": row.windows,
+                "Mac": row.mac,
+                "Linux": row.linux,
+                "Positive": row.positive,
+                "Negative": row.negative,
+                "Score rank": row.score_rank,
+                "Developers": row.developers,
+                "Publishers": row.publishers,
+                "Categories": row.categories,
+                "Genres": row.genres,
+                "Tags": row.tags,
+            }
+        )
+    return results, total
 
 
 def query_aggregate_data(
