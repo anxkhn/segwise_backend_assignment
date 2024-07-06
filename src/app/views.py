@@ -99,8 +99,7 @@ def check_secret_key() -> None:
     print(secret_key, API_SECRET_KEY)
     if not secret_key or secret_key != API_SECRET_KEY:
         api.abort(401, "Invalid or missing API Key")
-        
-import re
+
 
 def is_valid_csv_url(url: str) -> bool:
     """
@@ -113,8 +112,11 @@ def is_valid_csv_url(url: str) -> bool:
         bool: True if the URL is valid and ends with .csv, False otherwise.
     """
     # Regex pattern for validating a URL that ends with .csv
-    pattern = re.compile(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+\.csv$")
+    pattern = re.compile(
+        r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+\.csv$"
+    )
     return bool(pattern.match(url))
+
 
 def require_api_key(func: Any) -> Any:
     """
@@ -148,7 +150,7 @@ csv_upload_parser.add_argument(
 )
 csv_import_parser = reqparse.RequestParser()
 csv_import_parser.add_argument(
-    "file_url", type=str, required=True ,help="URL of the CSV file to import"
+    "file_url", type=str, required=True, help="URL of the CSV file to import"
 )
 csv_import_parser.add_argument(
     "altname", type=str, required=False, help="Alternative name for the file"
@@ -258,7 +260,9 @@ class ImportCSV(Resource):
         encoding = args.get("encoding")
         delimiter = args.get("delimiter")
         if not is_valid_csv_url(file_url):
-            return {"error": "Invalid file URL. URL must be valid and end with .csv"}, 400
+            return {
+                "error": "Invalid file URL. URL must be valid and end with .csv"
+            }, 400
         if validate_csv_params(encoding, delimiter) is False:
             return {"error": "Invalid encoding or delimiter"}, 400
         try:

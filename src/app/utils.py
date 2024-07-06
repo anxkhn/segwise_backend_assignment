@@ -63,7 +63,7 @@ def get_similar_games(game_name: str) -> Dict[str, Any]:
     """
     df = load_game_data()
 
-    ## Disabled due to memory issues for deployment
+    # Disabled due to memory issues for deployment
     # tfidf = TfidfVectorizer(stop_words="english")
     # tfidf_matrix = tfidf.fit_transform(df["combined_features"])
     # cosine_sim = cosine_similarity(tfidf_matrix)
@@ -75,13 +75,15 @@ def get_similar_games(game_name: str) -> Dict[str, Any]:
     # )[1:11]
     # game_indices = [i[0] for i in sim_scores]
 
-    similar_games_info =  [{
+    similar_games_info = [
+        {
             "app_id": "123",
             "name": "Some Game",
             "release_date": "2021-01-01",
             "price": 9.99,
             "similarity_score": 0.9,
-        }]
+        }
+    ]
 
     return {
         "closest_match": {
