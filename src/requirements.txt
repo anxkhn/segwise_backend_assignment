@@ -11,5 +11,4 @@ Requests==2.32.3
 scikit_learn==1.5.1
 scipy==1.14.0
 SQLAlchemy==2.0.30
-SQLAlchemy==2.0.31
 Werkzeug==3.0.3
