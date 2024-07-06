@@ -1,4 +1,5 @@
 venv/
+pwa/
 __pycache__/
 .env
 .git

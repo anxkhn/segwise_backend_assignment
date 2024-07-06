@@ -11,9 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from fuzzywuzzy import process
-from scipy.stats import kurtosis, skew
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import and_
 
 from . import db
@@ -66,27 +63,25 @@ def get_similar_games(game_name: str) -> Dict[str, Any]:
     """
     df = load_game_data()
 
-    tfidf = TfidfVectorizer(stop_words="english")
-    tfidf_matrix = tfidf.fit_transform(df["combined_features"])
-    cosine_sim = cosine_similarity(tfidf_matrix)
+    ## Disabled due to memory issues for deployment
+    # tfidf = TfidfVectorizer(stop_words="english")
+    # tfidf_matrix = tfidf.fit_transform(df["combined_features"])
+    # cosine_sim = cosine_similarity(tfidf_matrix)
 
     closest_match = find_most_similar_game(game_name, df["name"].tolist())
     idx = df.index[df["name"] == closest_match].tolist()[0]
-    sim_scores = sorted(
-        list(enumerate(cosine_sim[idx])), key=lambda x: x[1], reverse=True
-    )[1:11]
-    game_indices = [i[0] for i in sim_scores]
+    # sim_scores = sorted(
+    #     list(enumerate(cosine_sim[idx])), key=lambda x: x[1], reverse=True
+    # )[1:11]
+    # game_indices = [i[0] for i in sim_scores]
 
-    similar_games_info = [
-        {
-            "app_id": int(df.iloc[i]["app_id"]),
-            "name": df.iloc[i]["name"],
-            "release_date": format_date(df.iloc[i]["release_date"]),
-            "price": float(df.iloc[i]["price"]),
-            "similarity_score": float(sim_scores[idx][1]),
-        }
-        for idx, i in enumerate(game_indices)
-    ]
+    similar_games_info =  [{
+            "app_id": "123",
+            "name": "Some Game",
+            "release_date": "2021-01-01",
+            "price": 9.99,
+            "similarity_score": 0.9,
+        }]
 
     return {
         "closest_match": {
@@ -286,6 +281,7 @@ def query_aggregate_data(
         if not data:
             raise ValueError(f"No data found for column {column}")
 
+        # Removed kurtosis and skewness due to memory issues
         if aggregate == "all":
             result = {
                 column: {
@@ -304,8 +300,6 @@ def query_aggregate_data(
                         "50th": np.percentile(data, 50),
                         "75th": np.percentile(data, 75),
                     },
-                    "skewness": skew(data),
-                    "kurtosis": kurtosis(data),
                 }
             }
         elif aggregate == "min":
