@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import List, Dict, Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,7 @@ from . import db
 from .models import Event, GameData
 
 
-def load_game_data():
+def load_game_data() -> pd.DataFrame:
     games = GameData.query.all()
     data = [
         {
@@ -41,7 +42,7 @@ def load_game_data():
     df["combined_features"] = df["combined_features"].fillna("")
     return df
 
-def get_similar_games(game_name):
+def get_similar_games(game_name: str) -> Dict[str, Any]:
     df = load_game_data()
 
     # TF-IDF Vectorization
@@ -83,12 +84,12 @@ def get_similar_games(game_name):
     
     return result
 
-def find_most_similar_game(input_name, names):
+def find_most_similar_game(input_name: str, names: List[str]) -> Optional[str]:
     match = process.extractOne(input_name, names)
     return match[0] if match else None
 
 
-def parse_date(date_str):
+def parse_date(date_str: str) -> str:
     try:
         date = datetime.strptime(date_str, "%b %d, %Y")
     except ValueError:
@@ -101,13 +102,13 @@ def parse_date(date_str):
         except ValueError:
             date = datetime(
                 1970, 1, 1
-            )  # fallback to Jan 1, 1970 for invalid date strings
+            )  
     return date.strftime("%Y-%m-%d")
 
 
-def save_csv_to_db(csv_file_path, encoding="utf-8", delimiter=",", event_id=None):
+def save_csv_to_db(csv_file_path: str, encoding: str = "utf-8", delimiter: str = ",", event_id: Optional[int] = None) -> None:
     data = pd.read_csv(csv_file_path, encoding=encoding, delimiter=delimiter)
-    data = data.where(pd.notnull(data), None)  # Replace NaNs with None
+    data = data.where(pd.notnull(data), None)  
     for _, row in data.iterrows():
         game_data = GameData(
             app_id=row["AppID"],
@@ -135,7 +136,7 @@ def save_csv_to_db(csv_file_path, encoding="utf-8", delimiter=",", event_id=None
     db.session.commit()
 
 
-def query_data(filters):
+def query_data(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
     query = GameData.query
     for key, value in filters.items():
         if hasattr(GameData, key):
@@ -147,7 +148,7 @@ def query_data(filters):
     return [data.as_dict() for data in query.all()]
 
 
-def query_aggregate_data(aggregate, column=None):
+def query_aggregate_data(aggregate: str, column: Optional[str] = None) -> Dict[str, Any]:
     allowed_columns = ["price", "dlc_count", "positive", "negative"]
 
     if column and column not in allowed_columns and column != "all":
@@ -250,10 +251,10 @@ def query_aggregate_data(aggregate, column=None):
     return result
 
 
-def import_sample_data():
+def import_sample_data() -> None:
     sample_csv_path = "sample_gamedata.csv"
     data = pd.read_csv(sample_csv_path)
-    data = data.where(pd.notnull(data), None)  # Replace NaNs with None
+    data = data.where(pd.notnull(data), None)  
     for _, row in data.iterrows():
         game_data = GameData(
             app_id=row["AppID"],
@@ -281,10 +282,10 @@ def import_sample_data():
     db.session.commit()
 
 
-def import_sample_events():
+def import_sample_events() -> None:
     sample_events_path = "sample_events.csv"
     data = pd.read_csv(sample_events_path)
-    data = data.where(pd.notnull(data), None)  # Replace NaNs with None
+    data = data.where(pd.notnull(data), None)  
     for _, row in data.iterrows():
         event = Event(
             original_url=row["original_url"],

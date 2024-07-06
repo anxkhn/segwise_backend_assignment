@@ -1,4 +1,6 @@
 from . import db
+from typing import Dict, Any, Union
+
 
 
 class Event(db.Model):
@@ -35,7 +37,7 @@ class GameData(db.Model):
     tags = db.Column(db.String(255), nullable=True)
     event_id = db.Column(db.Integer, db.ForeignKey("event.id"), nullable=False)
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[str, Union[int, str, float, bool]]:
         return {
             "id": self.id,
             "app_id": self.app_id,

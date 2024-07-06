@@ -2,6 +2,7 @@ import os
 import time
 from datetime import datetime
 from functools import wraps
+from typing import Any, Dict, Tuple, List, Optional
 
 import requests
 from dotenv import load_dotenv
@@ -31,14 +32,14 @@ UPLOAD_FOLDER = "uploads/"
 ALLOWED_EXTENSIONS = {"csv"}
 
 
-def validate_csv_params(encoding, delimiter):
-    valid_encodings = ["utf-8", "ascii", "iso-8859-1"]  # Add more as needed
+def validate_csv_params(encoding: str, delimiter: str) -> bool:
+    valid_encodings = ["utf-8", "ascii", "iso-8859-1"]  
     if encoding not in valid_encodings or len(delimiter) != 1:
         return False
     return True
 
 
-def allowed_file(filename):
+def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
@@ -68,13 +69,13 @@ csv_import_parser.add_argument(
 )
 
 
-def check_secret_key():
+def check_secret_key() -> None:
     secret_key = request.headers.get("X-API-Key")
     if not secret_key or secret_key != "test":
         api.abort(401, "Invalid or missing API Key")
 
 
-def require_api_key(func):
+def require_api_key(func: Any) -> Any:
     @wraps(func)
     def decorated(*args, **kwargs):
         check_secret_key()
@@ -89,7 +90,7 @@ class UploadCSV(Resource):
     @api.expect(csv_upload_parser)
     @limiter.limit("2 per minute")
     @require_api_key
-    def post(self):
+    def post(self) -> Tuple[Dict[str, str], int]:
         file = request.files["file"]
         altname = request.args.get("altname")
         encoding = request.args.get("encoding")
@@ -129,7 +130,7 @@ class ImportCSV(Resource):
     @api.expect(csv_import_parser)
     @limiter.limit("2 per minute")
     @require_api_key
-    def post(self):
+    def post(self) -> Tuple[Dict[str, str], int]:
         args = csv_import_parser.parse_args()
         file_url = args.get("file_url")
         altname = args.get("altname")
@@ -230,7 +231,7 @@ class QueryData(Resource):
         }
     )
     @limiter.limit("10 per minute")
-    def get(self):
+    def get(self) -> Tuple[Dict[str, Any], int]:
         filters = request.args.to_dict()
         cursor = int(filters.pop("cursor", 0))
         limit = int(filters.pop("limit", 10))
@@ -245,7 +246,7 @@ class QueryData(Resource):
             return {"error": str(e)}, 500
 
 
-def query_data(filters, cursor, limit):
+def query_data(filters: Dict[str, Any], cursor: int, limit: int) -> Tuple[List[Dict[str, Any]], int]:
     query = db.session.query(GameData)
     for key, value in filters.items():
         if key == "before":
@@ -259,7 +260,6 @@ def query_data(filters, cursor, limit):
             query = query.filter(GameData.release_date == date_value)
         else:
             if hasattr(GameData, key):
-                # Convert the value to the appropriate type
                 column = getattr(GameData, key)
                 if column.property.columns[0].type.python_type in (int, float):
                     value = column.property.columns[0].type.python_type(value)
@@ -337,7 +337,7 @@ class StatsData(Resource):
         }
     )
     @limiter.limit("10 per minute")
-    def get(self):
+    def get(self) -> Tuple[Dict[str, Any], int]:
         aggregate = request.args.get("aggregate")
         column = request.args.get("column")
 
@@ -389,7 +389,7 @@ class SimilarGames(Resource):
         }
     )
     @limiter.limit("10 per minute")
-    def get(self):
+    def get(self) -> Tuple[Dict[str, Any], int]:
         game_name = request.args.get("name", "")
         if game_name:
             return get_similar_games(game_name), 200
