@@ -335,10 +335,6 @@ def query_aggregate_data(
                     }
                 }
             }
-        elif aggregate == "skewness":
-            result = {column: {"skewness": skew(data)}}
-        elif aggregate == "kurtosis":
-            result = {column: {"kurtosis": kurtosis(data)}}
     elif column == "all" or not column:
         for col in allowed_columns:
             column_attr = getattr(GameData, col)
@@ -361,8 +357,6 @@ def query_aggregate_data(
                     "50th": np.percentile(data, 50),
                     "75th": np.percentile(data, 75),
                 },
-                "skewness": skew(data),
-                "kurtosis": kurtosis(data),
             }
 
     return result
