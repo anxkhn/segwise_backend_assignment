@@ -1,17 +1,41 @@
+"""This Python script defines a Flask REST API for game data operations.
+
+The API supports the following functionalities:
+
+* Uploading CSV files containing game data.
+* Importing CSV files from URLs containing game data.
+* Querying game data based on various filters.
+* Retrieving statistical data for game numerical attributes.
+* Finding similar games based on a given game name.
+
+The API utilizes Flask-RESTX for building the API endpoints and data validation.
+
+Additionally, the script defines helper functions for:
+* Validating CSV file parameters (encoding and delimiter).
+* Checking if a file has an allowed extension.
+* Requiring a valid API key for specific functions.
+* Saving CSV data to the database.
+* Querying game data based on filters.
+* Querying statistical data for game numerical attributes.
+* Finding similar games based on a given game name.
+"""
+
 import os
 import time
-from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List,  Tuple
+from typing import Any, Dict, Tuple
 
 import requests
-from flask import request
+from flask import current_app, request
 from flask_restx import Namespace, Resource, fields, reqparse
+from requests.exceptions import RequestException
+from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
 
 from . import db, limiter
 from .models import Event, GameData
-from .utils import query_data,get_similar_games, query_aggregate_data, save_csv_to_db
+from .utils import get_similar_games, query_aggregate_data, query_data, save_csv_to_db
 
 authorizations = {"apikey": {"type": "apiKey",
                              "in": "header", "name": "X-API-Key"}}
@@ -31,6 +55,16 @@ ALLOWED_EXTENSIONS = {"csv"}
 
 
 def validate_csv_params(encoding: str, delimiter: str) -> bool:
+    """
+    Validate CSV parameters.
+
+    Args:
+        encoding (str): The file encoding.
+        delimiter (str): The CSV delimiter.
+
+    Returns:
+        bool: True if parameters are valid, False otherwise.
+    """
     valid_encodings = ["utf-8", "ascii", "iso-8859-1"]
     if encoding not in valid_encodings or len(delimiter) != 1:
         return False
@@ -38,7 +72,47 @@ def validate_csv_params(encoding: str, delimiter: str) -> bool:
 
 
 def allowed_file(filename: str) -> bool:
+    """
+    Check if the file has an allowed extension.
+
+    Args:
+        filename (str): The name of the file.
+
+    Returns:
+        bool: True if the file extension is allowed, False otherwise.
+    """
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def check_secret_key() -> None:
+    """
+    Check if the provided API key is valid.
+
+    Raises:
+        ApiException: If the API key is invalid or missing.
+    """
+    secret_key = request.headers.get("X-API-Key")
+    if not secret_key or secret_key != API_SECRET_KEY:
+        api.abort(401, "Invalid or missing API Key")
+
+
+def require_api_key(func: Any) -> Any:
+    """
+    Decorator to require a valid API key for a function.
+
+    Args:
+        func (Any): The function to decorate.
+
+    Returns:
+        Any: The decorated function.
+    """
+
+    @wraps(func)
+    def decorated(*args, **kwargs):
+        check_secret_key()
+        return func(*args, **kwargs)
+
+    return decorated
 
 
 csv_upload_parser = reqparse.RequestParser()
@@ -67,33 +141,36 @@ csv_import_parser.add_argument(
 )
 
 
-def check_secret_key() -> None:
-    secret_key = request.headers.get("X-API-Key")
-    if not secret_key or secret_key != API_SECRET_KEY:
-        api.abort(401, "Invalid or missing API Key")
-
-
-def require_api_key(func: Any) -> Any:
-    @wraps(func)
-    def decorated(*args, **kwargs):
-        check_secret_key()
-        return func(*args, **kwargs)
-
-    return decorated
-
-
 @api.route("/upload_csv")
 class UploadCSV(Resource):
+    """
+    Resource endpoint for uploading and processing CSV files.
+
+    Attributes:
+        api : Flask-RESTX namespace for API documentation.
+        csv_upload_parser : Request parser for CSV upload parameters.
+        limiter : Rate limiter for restricting API requests.
+
+    Methods:
+        post(): Handles POST requests for uploading CSV files.
+    """
+
     @api.doc(security="apikey")
     @api.expect(csv_upload_parser)
     @limiter.limit("2 per minute")
     @require_api_key
     def post(self) -> Tuple[Dict[str, str], int]:
+        """
+        Upload and process a CSV file.
+
+        Returns:
+            A tuple containing a message dictionary and HTTP status code.
+        """
         file = request.files["file"]
         altname = request.args.get("altname")
         encoding = request.args.get("encoding")
         delimiter = request.args.get("delimiter")
-        if validate_csv_params(encoding, delimiter) == False:
+        if validate_csv_params(encoding, delimiter) is False:
             return {"error": "Invalid encoding or delimiter"}, 400
         if file and allowed_file(file.filename):
             try:
@@ -116,28 +193,54 @@ class UploadCSV(Resource):
                 db.session.commit()
                 save_csv_to_db(file_path, encoding, delimiter, event.id)
                 return {"message": "CSV data uploaded and imported successfully"}, 201
+            except IOError as e:
+                return {"error": f"File I/O error: {str(e)}"}, 500
+            except BadRequest as e:
+                return {"error": f"Bad request: {str(e)}"}, 400
+            except SQLAlchemyError as e:
+                return {"error": f"Database error: {str(e)}"}, 500
             except Exception as e:
-                return {"error": str(e)}, 500
+                current_app.logger.error(
+                    f"Unexpected error in UploadCSV: {str(e)}")
+                return {"error": "An unexpected error occurred"}, 500
         else:
             return {"error": "Invalid file type. Allowed file types: csv"}, 400
 
 
 @api.route("/import_csv")
 class ImportCSV(Resource):
+    """
+    Resource endpoint for importing and processing CSV files from URLs.
+
+    Attributes:
+        api : Flask-RESTX namespace for API documentation.
+        csv_import_parser : Request parser for CSV import parameters.
+        limiter : Rate limiter for restricting API requests.
+
+    Methods:
+        post(): Handles POST requests for importing CSV files from URLs and saving them locally.
+    """
+
     @api.doc(security="apikey")
     @api.expect(csv_import_parser)
     @limiter.limit("2 per minute")
     @require_api_key
     def post(self) -> Tuple[Dict[str, str], int]:
+        """
+        Query game data based on various filters.
+
+        Returns:
+            Tuple[Dict[str, Any], int]: A tuple containing query results and HTTP status code.
+        """
         args = csv_import_parser.parse_args()
         file_url = args.get("file_url")
         altname = args.get("altname")
         encoding = args.get("encoding")
         delimiter = args.get("delimiter")
-        if validate_csv_params(encoding, delimiter) == False:
+        if validate_csv_params(encoding, delimiter) is False:
             return {"error": "Invalid encoding or delimiter"}, 400
         try:
-            response = requests.get(file_url, stream=True)
+            response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
                 filename = (
                     f"{int(time.time())}_{altname}.csv"
@@ -159,16 +262,36 @@ class ImportCSV(Resource):
                 db.session.commit()
                 save_csv_to_db(file_path, encoding, delimiter, event.id)
                 return {"message": "CSV data imported successfully from URL"}, 201
-            else:
-                return {
-                    "error": f"Failed to fetch file from URL: {file_url}. Status code: {response.status_code}"
-                }, 400
+            return {
+                "error": f"Failed to fetch file: {file_url}. Code: {response.status_code}"
+            }, 400
+        except RequestException as e:
+            return {"error": f"Failed to fetch file: {str(e)}"}, 400
+        except IOError as e:
+            return {"error": f"File I/O error: {str(e)}"}, 500
+        except SQLAlchemyError as e:
+            return {"error": f"Database error: {str(e)}"}, 500
         except Exception as e:
-            return {"error": str(e)}, 500
+            # Log the unexpected exception
+            current_app.logger.error(
+                f"Unexpected error in ImportCSV: {str(e)}")
+            return {"error": "An unexpected error occurred"}, 500
 
 
 @api.route("/query")
 class QueryData(Resource):
+    """
+    Resource endpoint for importing and processing CSV files from URLs.
+
+    Attributes:
+        api : Flask-RESTX namespace for API documentation.
+        csv_import_parser : Request parser for CSV import parameters.
+        limiter : Rate limiter for restricting API requests.
+
+    Methods:
+        post(): Handles POST requests for importing CSV files from URLs.
+    """
+
     @api.doc(
         params={
             "app_id": {"description": "App ID", "type": "integer"},
@@ -232,6 +355,12 @@ class QueryData(Resource):
     )
     @limiter.limit("10 per minute")
     def get(self) -> Tuple[Dict[str, Any], int]:
+        """
+        Query game data based on various filters.
+
+        Returns:
+            Tuple[Dict[str, Any], int]: A tuple containing query results and HTTP status code.
+        """
         filters = request.args.to_dict()
         cursor = int(filters.pop("cursor", 0))
         limit = int(filters.pop("limit", 10))
@@ -242,14 +371,30 @@ class QueryData(Resource):
                 "results": results,
                 "cursor": cursor + limit if cursor + limit < total else None,
             }, 200
+        except ValueError as e:
+            return {"error": f"Invalid input: {str(e)}"}, 400
+        except SQLAlchemyError as e:
+            return {"error": f"Database error: {str(e)}"}, 500
         except Exception as e:
-            return {"error": str(e)}, 500
-
-
+            # Log the unexpected exception
+            current_app.logger.error(
+                f"Unexpected error in QueryData: {str(e)}")
+            return {"error": "An unexpected error occurred"}, 500
 
 
 @api.route("/stats")
 class StatsData(Resource):
+    """
+    Resource endpoint for retrieving statistical data for game numerical attributes.
+
+    Attributes:
+        api : Flask-RESTX namespace for API documentation.
+        limiter : Rate limiter for restricting API requests.
+
+    Methods:
+        get(): Handles GET requests to retrieve statistical data based on specified aggregate function and column.
+    """
+
     @api.doc(
         params={
             "aggregate": {
@@ -274,7 +419,7 @@ class StatsData(Resource):
                 "required": True,
             },
             "column": {
-                "description": "Column to apply the aggregate function on (price, dlc_count, positive, negative)",
+                "description": "Column to apply aggregate function on (price, dlc_count, positive, negative)",
                 "type": "string",
                 "enum": ["all", "price", "dlc_count", "positive", "negative"],
                 "required": True,
@@ -283,6 +428,12 @@ class StatsData(Resource):
     )
     @limiter.limit("10 per minute")
     def get(self) -> Tuple[Dict[str, Any], int]:
+        """
+        Get statistical data for game numerical attributes.
+
+        Returns:
+            Tuple[Dict[str, Any], int]: A tuple containing statistical results and HTTP status code.
+        """
         aggregate = request.args.get("aggregate")
         column = request.args.get("column")
 
@@ -317,13 +468,29 @@ class StatsData(Resource):
             result = query_aggregate_data(aggregate, column)
             return {"result": result}, 200
         except ValueError as e:
-            return {"error": str(e)}, 400
+            return {"error": f"Invalid input: {str(e)}"}, 400
+        except SQLAlchemyError as e:
+            return {"error": f"Database error: {str(e)}"}, 500
         except Exception as e:
-            return {"error": str(e)}, 500
+            # Log the unexpected exception
+            current_app.logger.error(
+                f"Unexpected error in StatsData: {str(e)}")
+            return {"error": "An unexpected error occurred"}, 500
 
 
 @api.route("/similar_games")
 class SimilarGames(Resource):
+    """
+    Resource endpoint for finding similar games based on a given game name.
+
+    Attributes:
+        api : Flask-RESTX namespace for API documentation.
+        limiter : Rate limiter for restricting API requests.
+
+    Methods:
+        get(): Handles GET requests to find similar games based on a provided game name.
+    """
+
     @api.doc(
         params={
             "name": {
@@ -335,8 +502,13 @@ class SimilarGames(Resource):
     )
     @limiter.limit("10 per minute")
     def get(self) -> Tuple[Dict[str, Any], int]:
+        """
+        Find similar games based on a given game name.
+
+        Returns:
+            A tuple containing similar games results and HTTP status code.
+        """
         game_name = request.args.get("name", "")
         if game_name:
             return get_similar_games(game_name), 200
-        else:
-            return {"error": "Please provide a game name"}, 400
+        return {"error": "Please provide a game name"}, 400

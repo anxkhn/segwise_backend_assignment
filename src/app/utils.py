@@ -1,3 +1,10 @@
+"""
+Utility functions for game data analysis and database operations.
+
+This module includes functions to load game data, find similar games,
+perform data queries and aggregations, and import sample data into the database.
+"""
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -7,12 +14,19 @@ from fuzzywuzzy import process
 from scipy.stats import kurtosis, skew
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sqlalchemy import and_
 
 from . import db
 from .models import Event, GameData
 
 
 def load_game_data() -> pd.DataFrame:
+    """
+    Load game data from the database and prepare it for analysis.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing game data with combined features.
+    """
     games = GameData.query.all()
     data = [
         {
@@ -29,75 +43,102 @@ def load_game_data() -> pd.DataFrame:
     ]
     df = pd.DataFrame(data)
     df["combined_features"] = (
-        df["about_game"]
+        df["about_game"].fillna("")
         + " "
-        + df["categories"]
+        + df["categories"].fillna("")
         + " "
-        + df["genres"]
+        + df["genres"].fillna("")
         + " "
-        + df["tags"]
+        + df["tags"].fillna("")
     )
-    df["combined_features"] = df["combined_features"].fillna("")
     return df
 
 
 def get_similar_games(game_name: str) -> Dict[str, Any]:
+    """
+    Find similar games based on the input game name.
+
+    Args:
+        game_name (str): The name of the game to find similar games for.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the closest match and similar games.
+    """
     df = load_game_data()
 
-    # TF-IDF Vectorization
     tfidf = TfidfVectorizer(stop_words="english")
     tfidf_matrix = tfidf.fit_transform(df["combined_features"])
-
-    # Calculate cosine similarity
     cosine_sim = cosine_similarity(tfidf_matrix)
 
-    # Find the most similar game name in the dataset
     closest_match = find_most_similar_game(game_name, df["name"].tolist())
-
     idx = df.index[df["name"] == closest_match].tolist()[0]
-    sim_scores = list(enumerate(cosine_sim[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:11]  # Top 10 similar games
+    sim_scores = sorted(
+        list(enumerate(cosine_sim[idx])), key=lambda x: x[1], reverse=True
+    )[1:11]
     game_indices = [i[0] for i in sim_scores]
 
     similar_games_info = [
         {
             "app_id": int(df.iloc[i]["app_id"]),
             "name": df.iloc[i]["name"],
-            "release_date": (
-                df.iloc[i]["release_date"].strftime("%Y-%m-%d")
-                if isinstance(df.iloc[i]["release_date"], datetime)
-                else df.iloc[i]["release_date"]
-            ),
+            "release_date": format_date(df.iloc[i]["release_date"]),
             "price": float(df.iloc[i]["price"]),
             "similarity_score": float(sim_scores[idx][1]),
         }
         for idx, i in enumerate(game_indices)
     ]
 
-    result = {
+    return {
         "closest_match": {
             "app_id": int(df.loc[idx, "app_id"]),
             "name": df.loc[idx, "name"],
-            "release_date": (
-                df.loc[idx, "release_date"].strftime("%Y-%m-%d")
-                if isinstance(df.loc[idx, "release_date"], datetime)
-                else df.loc[idx, "release_date"]
-            ),
+            "release_date": format_date(df.loc[idx, "release_date"]),
             "price": float(df.loc[idx, "price"]),
         },
         "similar_games": similar_games_info,
     }
 
-    return result
-
 
 def find_most_similar_game(input_name: str, names: List[str]) -> Optional[str]:
+    """
+    Find the most similar game name from a list of names.
+
+    Args:
+        input_name (str): The input game name to match.
+        names (List[str]): A list of game names to search from.
+
+    Returns:
+        Optional[str]: The most similar game name, or None if no match is found.
+    """
     match = process.extractOne(input_name, names)
     return match[0] if match else None
 
 
+def format_date(date_value: Any) -> str:
+    """
+    Format a date value to a string.
+
+    Args:
+        date_value (Any): The date value to format.
+
+    Returns:
+        str: A formatted date string in 'YYYY-MM-DD' format.
+    """
+    if isinstance(date_value, datetime):
+        return date_value.strftime("%Y-%m-%d")
+    return date_value
+
+
 def parse_date(date_str: str) -> str:
+    """
+    Parse a date string into a standardized format.
+
+    Args:
+        date_str (str): The date string to parse.
+
+    Returns:
+        str: A formatted date string in 'YYYY-MM-DD' format.
+    """
     try:
         date = datetime.strptime(date_str, "%b %d, %Y")
     except ValueError:
@@ -118,6 +159,15 @@ def save_csv_to_db(
     delimiter: str = ",",
     event_id: Optional[int] = None,
 ) -> None:
+    """
+    Save data from a CSV file to the database.
+
+    Args:
+        csv_file_path (str): The path to the CSV file.
+        encoding (str, optional): The encoding of the CSV file. Defaults to "utf-8".
+        delimiter (str, optional): The delimiter used in the CSV file. Defaults to ",".
+        event_id (Optional[int], optional): The ID of the associated event. Defaults to None.
+    """
     data = pd.read_csv(csv_file_path, encoding=encoding, delimiter=delimiter)
     data = data.where(pd.notnull(data), None)
     for _, row in data.iterrows():
@@ -150,69 +200,78 @@ def save_csv_to_db(
 def query_data(
     filters: Dict[str, Any], cursor: int, limit: int
 ) -> Tuple[List[Dict[str, Any]], int]:
-    query = db.session.query(GameData)
+    """
+    Query game data based on filters and pagination parameters.
+
+    Args:
+        filters (Dict[str, Any]): A dictionary of filters to apply to the query.
+        cursor (int): The offset for pagination.
+        limit (int): The maximum number of results to return.
+
+    Returns:
+        A tuple containing the list of game data and the total count.
+    """
+    query = GameData.query
+
+    filter_conditions = []
     for key, value in filters.items():
         if key == "before":
-            date_value = datetime.strptime(value, "%Y-%m-%d").date()
-            query = query.filter(GameData.release_date < date_value)
+            filter_conditions.append(
+                GameData.release_date < datetime.strptime(
+                    value, "%Y-%m-%d").date()
+            )
         elif key == "after":
-            date_value = datetime.strptime(value, "%Y-%m-%d").date()
-            query = query.filter(GameData.release_date > date_value)
+            filter_conditions.append(
+                GameData.release_date > datetime.strptime(
+                    value, "%Y-%m-%d").date()
+            )
         elif key == "release_date":
-            date_value = datetime.strptime(value, "%Y-%m-%d").date()
-            query = query.filter(GameData.release_date == date_value)
+            filter_conditions.append(
+                GameData.release_date == datetime.strptime(
+                    value, "%Y-%m-%d").date()
+            )
         elif key == "min_price":
-            query = query.filter(GameData.price >= float(value))
+            filter_conditions.append(GameData.price >= float(value))
         elif key == "max_price":
-            query = query.filter(GameData.price <= float(value))
-        else:
-            if hasattr(GameData, key):
-                column = getattr(GameData, key)
-                if column.property.columns[0].type.python_type in (int, float):
-                    value = column.property.columns[0].type.python_type(value)
-                    query = query.filter(column == value)
-                elif column.property.columns[0].type.python_type is str:
-                    query = query.filter(column.contains(value))
-                elif column.property.columns[0].type.python_type is bool:
-                    value = value.lower() in ["true", "1", "yes"]
-                    query = query.filter(column == value)
-                else:
-                    query = query.filter(column == value)
+            filter_conditions.append(GameData.price <= float(value))
+        elif hasattr(GameData, key):
+            column = getattr(GameData, key)
+            column_type = column.property.columns[0].type.python_type
+            if column_type in (int, float):
+                filter_conditions.append(column == column_type(value))
+            elif column_type is str:
+                filter_conditions.append(column.contains(value))
+            elif column_type is bool:
+                filter_conditions.append(
+                    column == (value.lower() in ["true", "1", "yes"])
+                )
             else:
-                print(f"Attribute {key} not found in GameData model")
+                filter_conditions.append(column == value)
+        else:
+            print(f"Attribute {key} not found in GameData model")
+
+    if filter_conditions:
+        query = query.filter(and_(*filter_conditions))
+
     total = query.count()
-    query = query.offset(cursor).limit(limit)
-    results = []
-    for row in query.all():
-        results.append(
-            {
-                "AppID": row.app_id,
-                "Name": row.name,
-                "Release date": row.release_date,
-                "Required age": row.required_age,
-                "Price": row.price,
-                "DLC count": row.dlc_count,
-                "About the game": row.about_game,
-                "Supported languages": row.supported_languages,
-                "Windows": row.windows,
-                "Mac": row.mac,
-                "Linux": row.linux,
-                "Positive": row.positive,
-                "Negative": row.negative,
-                "Score rank": row.score_rank,
-                "Developers": row.developers,
-                "Publishers": row.publishers,
-                "Categories": row.categories,
-                "Genres": row.genres,
-                "Tags": row.tags,
-            }
-        )
-    return results, total
+    results = query.offset(cursor).limit(limit).all()
+
+    return [game.to_dict() for game in results], total
 
 
 def query_aggregate_data(
     aggregate: str, column: Optional[str] = None
 ) -> Dict[str, Any]:
+    """
+    Perform aggregate operations on game data.
+
+    Args:
+        aggregate (str): The type of aggregation to perform.
+        column (Optional[str], optional): The column to aggregate. Defaults to None.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the aggregated results.
+    """
     allowed_columns = ["price", "dlc_count", "positive", "negative"]
 
     if column and column not in allowed_columns and column != "all":
@@ -316,6 +375,9 @@ def query_aggregate_data(
 
 
 def import_sample_data() -> None:
+    """
+    Import sample game data from a CSV file into the database.
+    """
     sample_csv_path = "sample_gamedata.csv"
     data = pd.read_csv(sample_csv_path)
     data = data.where(pd.notnull(data), None)
@@ -347,6 +409,9 @@ def import_sample_data() -> None:
 
 
 def import_sample_events() -> None:
+    """
+    Import sample events data from a CSV file into the database.
+    """
     sample_events_path = "sample_events.csv"
     data = pd.read_csv(sample_events_path)
     data = data.where(pd.notnull(data), None)

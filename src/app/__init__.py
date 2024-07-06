@@ -1,3 +1,20 @@
+"""
+This module sets up the Flask application with necessary configurations
+and dependencies. It includes initializing the database, migrations,
+rate limiting, and API integration with Flask-RESTX. The module also
+ensures the upload folder exists and sets a maximum content length
+for file uploads.
+
+Dependencies:
+    - os: For operating system dependent functionalities.
+    - Flask: To create the Flask application instance.
+    - Limiter: For rate limiting the API.
+    - get_remote_address: To get the remote address for rate limiting.
+    - Migrate: For handling database migrations.
+    - Api: For creating a RESTful API.
+    - SQLAlchemy: For handling database operations.
+"""
+
 import os
 
 from flask import Flask
@@ -12,8 +29,21 @@ limiter = Limiter(key_func=get_remote_address)
 authorizations = {"apikey": {"type": "apiKey",
                              "in": "header", "name": "X-API-Key"}}
 
+# Flask application factory function with docstrings
+
 
 def create_app() -> Flask:
+    """
+    Creates a Flask application instance with database, migrations,
+    rate limiting, and API integration.
+
+    Args:
+        config_object (object, optional): The configuration object to use.
+            Defaults to Config.
+
+    Returns:
+        Flask: The configured Flask application instance.
+    """
     app = Flask(__name__)
     app.config.from_object("config.Config")
     # Define the UPLOAD_FOLDER path
@@ -28,8 +58,7 @@ def create_app() -> Flask:
     db.init_app(app)
     Migrate(app, db)
     limiter.init_app(app)
-    api = Api(app, doc="/swagger",
-              authorizations=authorizations, security="apikey")
+    api = Api(app, doc="/docs", authorizations=authorizations, security="apikey")
     with app.app_context():
         from . import views
 
