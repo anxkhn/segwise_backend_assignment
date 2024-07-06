@@ -4,7 +4,9 @@ Configuration module for application settings.
 This module defines the `Config` class that holds configuration parameters
 such as database URI, secret keys, and rate limit settings.
 """
+
 import os
+
 
 class Config:
     """
