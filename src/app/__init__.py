@@ -55,6 +55,7 @@ def create_app() -> Flask:
         os.makedirs(app.config["UPLOAD_FOLDER"])
     except FileExistsError:
         pass
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
     db.init_app(app)
     Migrate(app, db)
     limiter.init_app(app)
