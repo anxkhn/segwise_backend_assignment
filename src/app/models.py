@@ -1,6 +1,6 @@
-from . import db
-from typing import Dict, Any, Union
+from typing import Dict, Union
 
+from . import db
 
 
 class Event(db.Model):

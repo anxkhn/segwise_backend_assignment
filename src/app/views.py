@@ -2,19 +2,17 @@ import os
 import time
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, Tuple, List, Optional
+from typing import Any, Dict, List,  Tuple
 
 import requests
-from dotenv import load_dotenv
-from flask import jsonify, request
-from flask_restx import Api, Namespace, Resource, fields, reqparse
+from flask import request
+from flask_restx import Namespace, Resource, fields, reqparse
 from werkzeug.utils import secure_filename
 
 from . import db, limiter
 from .models import Event, GameData
 from .utils import get_similar_games, query_aggregate_data, save_csv_to_db
 
-load_dotenv()
 authorizations = {"apikey": {"type": "apiKey",
                              "in": "header", "name": "X-API-Key"}}
 api = Namespace(
@@ -33,7 +31,7 @@ ALLOWED_EXTENSIONS = {"csv"}
 
 
 def validate_csv_params(encoding: str, delimiter: str) -> bool:
-    valid_encodings = ["utf-8", "ascii", "iso-8859-1"]  
+    valid_encodings = ["utf-8", "ascii", "iso-8859-1"]
     if encoding not in valid_encodings or len(delimiter) != 1:
         return False
     return True
@@ -71,7 +69,7 @@ csv_import_parser.add_argument(
 
 def check_secret_key() -> None:
     secret_key = request.headers.get("X-API-Key")
-    if not secret_key or secret_key != "test":
+    if not secret_key or secret_key != API_SECRET_KEY:
         api.abort(401, "Invalid or missing API Key")
 
 
@@ -246,7 +244,9 @@ class QueryData(Resource):
             return {"error": str(e)}, 500
 
 
-def query_data(filters: Dict[str, Any], cursor: int, limit: int) -> Tuple[List[Dict[str, Any]], int]:
+def query_data(
+    filters: Dict[str, Any], cursor: int, limit: int
+) -> Tuple[List[Dict[str, Any]], int]:
     query = db.session.query(GameData)
     for key, value in filters.items():
         if key == "before":

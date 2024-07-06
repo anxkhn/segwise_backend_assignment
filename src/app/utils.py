@@ -1,14 +1,12 @@
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from flask import jsonify
 from fuzzywuzzy import process
 from scipy.stats import kurtosis, skew
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy import func
 
 from . import db
 from .models import Event, GameData
@@ -42,6 +40,7 @@ def load_game_data() -> pd.DataFrame:
     df["combined_features"] = df["combined_features"].fillna("")
     return df
 
+
 def get_similar_games(game_name: str) -> Dict[str, Any]:
     df = load_game_data()
 
@@ -65,24 +64,33 @@ def get_similar_games(game_name: str) -> Dict[str, Any]:
         {
             "app_id": int(df.iloc[i]["app_id"]),
             "name": df.iloc[i]["name"],
-            "release_date": df.iloc[i]["release_date"].strftime("%Y-%m-%d") if isinstance(df.iloc[i]["release_date"], datetime) else df.iloc[i]["release_date"],
+            "release_date": (
+                df.iloc[i]["release_date"].strftime("%Y-%m-%d")
+                if isinstance(df.iloc[i]["release_date"], datetime)
+                else df.iloc[i]["release_date"]
+            ),
             "price": float(df.iloc[i]["price"]),
-            "similarity_score": float(sim_scores[idx][1])
+            "similarity_score": float(sim_scores[idx][1]),
         }
         for idx, i in enumerate(game_indices)
     ]
-    
+
     result = {
         "closest_match": {
             "app_id": int(df.loc[idx, "app_id"]),
             "name": df.loc[idx, "name"],
-            "release_date": df.loc[idx, "release_date"].strftime("%Y-%m-%d") if isinstance(df.loc[idx, "release_date"], datetime) else df.loc[idx, "release_date"],
-            "price": float(df.loc[idx, "price"])
+            "release_date": (
+                df.loc[idx, "release_date"].strftime("%Y-%m-%d")
+                if isinstance(df.loc[idx, "release_date"], datetime)
+                else df.loc[idx, "release_date"]
+            ),
+            "price": float(df.loc[idx, "price"]),
         },
-        "similar_games": similar_games_info
+        "similar_games": similar_games_info,
     }
-    
+
     return result
+
 
 def find_most_similar_game(input_name: str, names: List[str]) -> Optional[str]:
     match = process.extractOne(input_name, names)
@@ -100,15 +108,18 @@ def parse_date(date_str: str) -> str:
         try:
             date = datetime.strptime(f"{month} {day}, {year}", "%b %d, %Y")
         except ValueError:
-            date = datetime(
-                1970, 1, 1
-            )  
+            date = datetime(1970, 1, 1)
     return date.strftime("%Y-%m-%d")
 
 
-def save_csv_to_db(csv_file_path: str, encoding: str = "utf-8", delimiter: str = ",", event_id: Optional[int] = None) -> None:
+def save_csv_to_db(
+    csv_file_path: str,
+    encoding: str = "utf-8",
+    delimiter: str = ",",
+    event_id: Optional[int] = None,
+) -> None:
     data = pd.read_csv(csv_file_path, encoding=encoding, delimiter=delimiter)
-    data = data.where(pd.notnull(data), None)  
+    data = data.where(pd.notnull(data), None)
     for _, row in data.iterrows():
         game_data = GameData(
             app_id=row["AppID"],
@@ -148,7 +159,9 @@ def query_data(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [data.as_dict() for data in query.all()]
 
 
-def query_aggregate_data(aggregate: str, column: Optional[str] = None) -> Dict[str, Any]:
+def query_aggregate_data(
+    aggregate: str, column: Optional[str] = None
+) -> Dict[str, Any]:
     allowed_columns = ["price", "dlc_count", "positive", "negative"]
 
     if column and column not in allowed_columns and column != "all":
@@ -254,7 +267,7 @@ def query_aggregate_data(aggregate: str, column: Optional[str] = None) -> Dict[s
 def import_sample_data() -> None:
     sample_csv_path = "sample_gamedata.csv"
     data = pd.read_csv(sample_csv_path)
-    data = data.where(pd.notnull(data), None)  
+    data = data.where(pd.notnull(data), None)
     for _, row in data.iterrows():
         game_data = GameData(
             app_id=row["AppID"],
@@ -285,7 +298,7 @@ def import_sample_data() -> None:
 def import_sample_events() -> None:
     sample_events_path = "sample_events.csv"
     data = pd.read_csv(sample_events_path)
-    data = data.where(pd.notnull(data), None)  
+    data = data.where(pd.notnull(data), None)
     for _, row in data.iterrows():
         event = Event(
             original_url=row["original_url"],
