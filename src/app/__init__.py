@@ -53,9 +53,11 @@ def create_app() -> Flask:
     # Ensure the UPLOAD_FOLDER exists
     try:
         os.makedirs(app.config["UPLOAD_FOLDER"])
+        os.chmod("uploads/", 0o755)
+
     except FileExistsError:
         pass
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL") if os.environ.get("DATABASE_URL") is not None else "sqlite:///app.db"
     db.init_app(app)
     Migrate(app, db)
     limiter.init_app(app)

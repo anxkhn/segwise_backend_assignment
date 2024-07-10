@@ -96,7 +96,6 @@ def check_secret_key() -> None:
         ApiException: If the API key is invalid or missing.
     """
     secret_key = request.headers.get("X-API-Key")
-    print(secret_key, API_SECRET_KEY)
     if not secret_key or secret_key != API_SECRET_KEY:
         api.abort(401, "Invalid or missing API Key")
 
@@ -265,6 +264,9 @@ class ImportCSV(Resource):
             }, 400
         if validate_csv_params(encoding, delimiter) is False:
             return {"error": "Invalid encoding or delimiter"}, 400
+        if not os.path.exists(UPLOAD_FOLDER):
+            os.makedirs(UPLOAD_FOLDER)
+        os.chmod(UPLOAD_FOLDER, 0o755)
         try:
             response = requests.get(file_url, stream=True, timeout=10)
             if response.status_code == 200:
