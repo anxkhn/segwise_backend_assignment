@@ -206,7 +206,7 @@ This application can be run either locally or using Docker. Choose the method th
    cd src && python run.py
    ```
 
-   The API will be accessible at `http://localhost:8000`.
+   The API will be accessible at `http://localhost:5123`.
 
 With these instructions, users will be guided on how to set up and run the application within a virtual environment.
 
@@ -217,21 +217,21 @@ With these instructions, users will be guided on how to set up and run the appli
    - Docker installed on your system: [https://www.docker.com/](https://www.docker.com/)
    - Docker Compose installed: [https://docs.docker.compose/install/](https://docs.docker.compose/install/)
 
-4. **Run with Docker Compose:**
-
-   ```bash
-   docker-compose up
-   ```
-
-   This will build a Docker image, start the necessary services (app and Redis), and run the application on port 8000.
-
-5. Build and run the Docker containers:
+4. **Build the docker image:**
 
 ```bash
-docker-compose up --build
+   docker compose build
 ```
 
-The API will be accessible at `http://localhost:8000`.
+This will build a Docker image, start the necessary services (app and Redis), and run the application on port 5123.
+
+5. Run the Docker container:
+
+```bash
+docker compose up
+```
+
+The API will be accessible at `http://localhost:5123`.
 
 ### Swagger UI Integration
 
