@@ -1,0 +1,13 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5123:5123"
+    volumes:
+      - .:/usr/src/app
+    environment:
+      - FLASK_ENV=development
+      - PORT=5123
+    command: python src/run.py
